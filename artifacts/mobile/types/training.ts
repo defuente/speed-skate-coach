@@ -26,6 +26,7 @@ export interface Session {
   athleteName: string;
   trainingType: TrainingType;
   distancePerLap: number;   // meters, 0 = not set
+  targetLapTimeMs?: number; // optional target time per lap in milliseconds
   laps: Lap[];
   totalTime: number;        // milliseconds
   notes?: string;
@@ -35,6 +36,7 @@ export interface SessionConfig {
   athleteName: string;
   trainingType: TrainingType;
   distancePerLap: number;
+  targetLapTimeMs?: number;
 }
 
 export interface TrainingStats {
@@ -44,6 +46,8 @@ export interface TrainingStats {
   consistency: number;    // coefficient of variation (%)
   averageSpeed: number;   // km/h
   totalDistance: number;  // km
+  lapsOnTarget: number;
+  targetCompliance: number; // percentage, 0 when target is not configured
 }
 
 export interface AppSettings {
