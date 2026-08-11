@@ -5,30 +5,25 @@ export type TrainingType =
   | 'Técnica'
   | 'Libre';
 
-export const TRAINING_TYPES: TrainingType[] = [
-  'Resistencia',
-  'Velocidad',
-  'Intervalos',
-  'Técnica',
-  'Libre',
-];
+export const TRAINING_TYPES: TrainingType[] = ['Resistencia', 'Velocidad', 'Intervalos', 'Técnica', 'Libre'];
 
 export interface Lap {
   number: number;
-  lapTime: number;        // milliseconds
-  cumulativeTime: number; // milliseconds
-  speed?: number;         // km/h, only when distancePerLap > 0
+  lapTime: number;
+  cumulativeTime: number;
+  speed?: number;
+  targetLapTimeMs?: number;
 }
 
 export interface Session {
   id: string;
-  date: string;             // ISO 8601
+  date: string;
   athleteName: string;
   trainingType: TrainingType;
-  distancePerLap: number;   // meters, 0 = not set
-  targetLapTimeMs?: number; // optional target time per lap in milliseconds
+  distancePerLap: number;
+  targetLapTimeMs?: number;
   laps: Lap[];
-  totalTime: number;        // milliseconds
+  totalTime: number;
   notes?: string;
 }
 
@@ -43,11 +38,11 @@ export interface TrainingStats {
   bestLap: Lap | null;
   worstLap: Lap | null;
   averageLapTime: number;
-  consistency: number;    // coefficient of variation (%)
-  averageSpeed: number;   // km/h
-  totalDistance: number;  // km
+  consistency: number;
+  averageSpeed: number;
+  totalDistance: number;
   lapsOnTarget: number;
-  targetCompliance: number; // percentage, 0 when target is not configured
+  targetCompliance: number;
 }
 
 export interface AppSettings {
