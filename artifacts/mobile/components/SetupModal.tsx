@@ -1,26 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Ionicons } from '@expo/vector-icons';
 import { SessionConfig, TRAINING_TYPES, TrainingType } from '@/types/training';
 
-interface Props {
-  visible: boolean;
-  onClose: () => void;
-  onStart: (config: SessionConfig) => void;
-  defaults: SessionConfig;
-}
+interface Props { visible: boolean; onClose: () => void; onStart: (config: SessionConfig) => void; defaults: SessionConfig; }
 
 export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
   const colors = useColors();
@@ -28,95 +13,61 @@ export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
   const [athleteName, setAthleteName] = useState('');
   const [trainingType, setTrainingType] = useState<TrainingType>('Resistencia');
   const [distanceStr, setDistanceStr] = useState('400');
+  const [targetStr, setTargetStr] = useState('');
 
   useEffect(() => {
     if (visible) {
       setAthleteName(defaults.athleteName);
       setTrainingType(defaults.trainingType);
       setDistanceStr(String(defaults.distancePerLap));
+      setTargetStr(defaults.targetLapTimeMs ? (defaults.targetLapTimeMs / 1000).toFixed(2) : '');
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStart = () => {
+    const targetSeconds = Number(targetStr.replace(',', '.'));
     onStart({
       athleteName: athleteName.trim(),
       trainingType,
       distancePerLap: parseInt(distanceStr, 10) || 0,
+      targetLapTimeMs: targetSeconds > 0 ? Math.round(targetSeconds * 1000) : undefined,
     });
   };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        {/* Header */}
+      <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: insets.top + 16 }]}>
           <Text style={[styles.title, { color: colors.foreground }]}>Nuevo Entrenamiento</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={24} color={colors.mutedForeground} />
-          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}><Ionicons name="close" size={24} color={colors.mutedForeground} /></TouchableOpacity>
         </View>
-
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="handled">
-          {/* Athlete */}
           <Text style={[styles.label, { color: colors.mutedForeground }]}>DEPORTISTA</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
-            value={athleteName}
-            onChangeText={setAthleteName}
-            placeholder="Nombre del deportista"
-            placeholderTextColor={colors.mutedForeground}
-            returnKeyType="done"
-          />
+          <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={athleteName} onChangeText={setAthleteName} placeholder="Nombre del deportista" placeholderTextColor={colors.mutedForeground} returnKeyType="done" />
 
-          {/* Training type */}
           <Text style={[styles.label, { color: colors.mutedForeground }]}>TIPO DE ENTRENAMIENTO</Text>
-          <View style={styles.typeWrap}>
-            {TRAINING_TYPES.map(t => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => setTrainingType(t)}
-                activeOpacity={0.7}
-                style={[
-                  styles.typeBtn,
-                  {
-                    backgroundColor: trainingType === t ? colors.primary : colors.card,
-                    borderColor: trainingType === t ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.typeTxt, { color: trainingType === t ? colors.primaryForeground : colors.foreground }]}>
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <View style={styles.typeWrap}>{TRAINING_TYPES.map(t => (
+            <TouchableOpacity key={t} onPress={() => setTrainingType(t)} activeOpacity={0.7} style={[styles.typeBtn, { backgroundColor: trainingType === t ? colors.primary : colors.card, borderColor: trainingType === t ? colors.primary : colors.border }]}>
+              <Text style={[styles.typeTxt, { color: trainingType === t ? colors.primaryForeground : colors.foreground }]}>{t}</Text>
+            </TouchableOpacity>
+          ))}</View>
 
-          {/* Distance */}
           <Text style={[styles.label, { color: colors.mutedForeground }]}>DISTANCIA POR VUELTA</Text>
           <View style={[styles.inputRow, { backgroundColor: colors.input, borderColor: colors.border }]}>
-            <TextInput
-              style={[styles.inputInner, { color: colors.foreground }]}
-              value={distanceStr}
-              onChangeText={setDistanceStr}
-              keyboardType="numeric"
-              placeholder="400"
-              placeholderTextColor={colors.mutedForeground}
-              returnKeyType="done"
-            />
+            <TextInput style={[styles.inputInner, { color: colors.foreground }]} value={distanceStr} onChangeText={setDistanceStr} keyboardType="numeric" placeholder="400" placeholderTextColor={colors.mutedForeground} returnKeyType="done" />
             <Text style={[styles.unit, { color: colors.mutedForeground }]}>metros</Text>
           </View>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>Pon 0 para no calcular velocidad</Text>
-        </ScrollView>
 
-        {/* Start button */}
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>TIEMPO OBJETIVO POR VUELTA</Text>
+          <View style={[styles.inputRow, { backgroundColor: colors.input, borderColor: colors.border }]}>
+            <TextInput style={[styles.inputInner, { color: colors.foreground }]} value={targetStr} onChangeText={setTargetStr} keyboardType="decimal-pad" placeholder="Ej. 32.50" placeholderTextColor={colors.mutedForeground} returnKeyType="done" />
+            <Text style={[styles.unit, { color: colors.mutedForeground }]}>segundos</Text>
+          </View>
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>Opcional · las vueltas iguales o más rápidas contarán como objetivo cumplido</Text>
+        </ScrollView>
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity onPress={handleStart} activeOpacity={0.82} style={[styles.startBtn, { backgroundColor: colors.primary }]}>
-            <Ionicons name="play" size={22} color={colors.primaryForeground} />
-            <Text style={[styles.startTxt, { color: colors.primaryForeground }]}>Iniciar</Text>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={handleStart} activeOpacity={0.82} style={[styles.startBtn, { backgroundColor: colors.primary }]}><Ionicons name="play" size={22} color={colors.primaryForeground} /><Text style={[styles.startTxt, { color: colors.primaryForeground }]}>Iniciar</Text></TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -124,28 +75,5 @@ export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  body: { flex: 1 },
-  bodyContent: { padding: 20, gap: 8, paddingBottom: 32 },
-  label: { fontSize: 11, letterSpacing: 0.8, marginTop: 16, marginBottom: 6, fontFamily: 'Inter_600SemiBold' },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular' },
-  typeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5 },
-  typeTxt: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 },
-  inputInner: { flex: 1, paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular' },
-  unit: { fontSize: 14, paddingLeft: 8, fontFamily: 'Inter_400Regular' },
-  hint: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  footer: { paddingHorizontal: 20, paddingTop: 12 },
-  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18, borderRadius: 14 },
-  startTxt: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  container: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth }, title: { fontSize: 20, fontFamily: 'Inter_700Bold' }, body: { flex: 1 }, bodyContent: { padding: 20, gap: 8, paddingBottom: 32 }, label: { fontSize: 11, letterSpacing: 0.8, marginTop: 16, marginBottom: 6, fontFamily: 'Inter_600SemiBold' }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular' }, typeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, typeBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5 }, typeTxt: { fontSize: 14, fontFamily: 'Inter_500Medium' }, inputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 }, inputInner: { flex: 1, paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular' }, unit: { fontSize: 14, paddingLeft: 8, fontFamily: 'Inter_400Regular' }, hint: { fontSize: 12, fontFamily: 'Inter_400Regular' }, footer: { paddingHorizontal: 20, paddingTop: 12 }, startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18, borderRadius: 14 }, startTxt: { fontSize: 18, fontFamily: 'Inter_700Bold' },
 });
