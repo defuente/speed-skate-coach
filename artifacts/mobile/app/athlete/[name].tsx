@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -20,9 +20,7 @@ export default function AthleteDetailScreen() {
   const [editName, setEditName] = useState(athleteName);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    if (athleteName) setSessions(await getAthleteSessions(athleteName));
-  }, [athleteName]);
+  const load = useCallback(async () => { if (athleteName) setSessions(await getAthleteSessions(athleteName)); }, [athleteName]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const stats = useMemo(() => {
@@ -46,7 +44,7 @@ export default function AthleteDetailScreen() {
     try {
       await renameAthlete(athleteName, cleanName);
       setEditVisible(false);
-      router.replace({ pathname: '/athlete/[name]', params: { name: cleanName } });
+      router.replace({ pathname: '/athlete/[name]', params: { name: cleanName } } as Href);
     } catch {
       Alert.alert('Error', 'No se pudo renombrar el deportista.');
     } finally {
@@ -57,7 +55,7 @@ export default function AthleteDetailScreen() {
   const handleDelete = useCallback(() => {
     Alert.alert('Eliminar deportista', `¿Eliminar a ${athleteName} y todas sus sesiones? Esta acción no se puede deshacer.`, [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => { await deleteAthlete(athleteName); router.replace('/athletes'); } },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => { await deleteAthlete(athleteName); router.replace('/(tabs)/athletes' as Href); } },
     ]);
   }, [athleteName, router]);
 
