@@ -2,7 +2,7 @@
   "expo": {
     "name": "PatinCrono",
     "slug": "mobile",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
@@ -40,6 +40,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bda66ea5-4ead-45a2-a41d-a4042ae7bee8"
+      }
     }
   }
 }
