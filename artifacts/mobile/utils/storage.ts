@@ -36,6 +36,15 @@ function uniqueAthleteNames(names: string[]): string[] {
     });
 }
 
+async function getStoredAthletes(): Promise<string[]> {
+  try {
+    const json = await AsyncStorage.getItem(ATHLETES_KEY);
+    return json ? JSON.parse(json) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getSessions(): Promise<Session[]> {
   try {
     const json = await AsyncStorage.getItem(SESSIONS_KEY);
@@ -62,15 +71,19 @@ export async function getSession(id: string): Promise<Session | null> {
   return sessions.find(s => s.id === id) ?? null;
 }
 
+export async function getAthleteSessions(name: string): Promise<Session[]> {
+  const key = normalizeAthleteName(name);
+  const sessions = await getSessions();
+  return sessions.filter(session => normalizeAthleteName(session.athleteName) === key);
+}
+
 export async function getAthletes(): Promise<string[]> {
   try {
-    const [storedJson, sessions] = await Promise.all([
-      AsyncStorage.getItem(ATHLETES_KEY),
-      getSessions(),
-    ]);
-    const stored: string[] = storedJson ? JSON.parse(storedJson) : [];
+    const [stored, sessions] = await Promise.all([getStoredAthletes(), getSessions()]);
     const fromHistory = sessions.map(session => session.athleteName);
-    const athletes = uniqueAthleteNames([...stored, ...fromHistory]);
+    const athletes = uniqueAthleteNames([...stored, ...fromHistory]).sort((a, b) =>
+      a.localeCompare(b, 'es', { sensitivity: 'base' }),
+    );
     await AsyncStorage.setItem(ATHLETES_KEY, JSON.stringify(athletes));
     return athletes;
   } catch {
@@ -93,6 +106,49 @@ export async function saveAthlete(name: string): Promise<string[]> {
   );
   await AsyncStorage.setItem(ATHLETES_KEY, JSON.stringify(updated));
   return updated;
+}
+
+export async function renameAthlete(oldName: string, newName: string): Promise<void> {
+  const cleanOld = oldName.trim();
+  const cleanNew = newName.trim();
+  if (!cleanOld || !cleanNew) throw new Error('Nombre inválido');
+
+  const oldKey = normalizeAthleteName(cleanOld);
+  const newKey = normalizeAthleteName(cleanNew);
+  if (oldKey === newKey && cleanOld === cleanNew) return;
+
+  const [sessions, stored] = await Promise.all([getSessions(), getStoredAthletes()]);
+  const renamedSessions = sessions.map(session =>
+    normalizeAthleteName(session.athleteName) === oldKey
+      ? { ...session, athleteName: cleanNew }
+      : session,
+  );
+
+  const renamedAthletes = uniqueAthleteNames([
+    ...stored.filter(name => normalizeAthleteName(name) !== oldKey),
+    cleanNew,
+  ]).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+  await Promise.all([
+    AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(renamedSessions)),
+    AsyncStorage.setItem(ATHLETES_KEY, JSON.stringify(renamedAthletes)),
+  ]);
+}
+
+export async function deleteAthlete(name: string): Promise<void> {
+  const key = normalizeAthleteName(name);
+  const [sessions, stored] = await Promise.all([getSessions(), getStoredAthletes()]);
+
+  await Promise.all([
+    AsyncStorage.setItem(
+      SESSIONS_KEY,
+      JSON.stringify(sessions.filter(session => normalizeAthleteName(session.athleteName) !== key)),
+    ),
+    AsyncStorage.setItem(
+      ATHLETES_KEY,
+      JSON.stringify(stored.filter(athlete => normalizeAthleteName(athlete) !== key)),
+    ),
+  ]);
 }
 
 export async function getStorageData(): Promise<StorageData> {
