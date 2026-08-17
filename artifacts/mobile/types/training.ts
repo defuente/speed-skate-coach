@@ -22,6 +22,7 @@ export interface Session {
   trainingType: TrainingType;
   distancePerLap: number;
   targetLapTimeMs?: number;
+  targetLapCount?: number;
   laps: Lap[];
   totalTime: number;
   notes?: string;
@@ -32,6 +33,7 @@ export interface SessionConfig {
   trainingType: TrainingType;
   distancePerLap: number;
   targetLapTimeMs?: number;
+  targetLapCount?: number;
 }
 
 export interface TrainingStats {
