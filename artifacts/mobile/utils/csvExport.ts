@@ -16,12 +16,24 @@ async function shareCSV(csv: string, filename: string): Promise<void> {
   if (Platform.OS === 'web') {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
   }
-  const [FileSystem, Sharing] = await Promise.all([import('expo-file-system'), import('expo-sharing')]);
+
+  // Expo SDK 54 exposes documentDirectory/writeAsStringAsync through the legacy API.
+  const [FileSystem, Sharing] = await Promise.all([
+    import('expo-file-system/legacy'),
+    import('expo-sharing'),
+  ]);
   const path = `${FileSystem.documentDirectory}${filename}`;
   await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Exportar Speed Skate Coach' });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Exportar Speed Skate Coach' });
+  }
 }
 
 function normalizeName(name: string): string { return (name || 'Sin nombre').trim().toLocaleLowerCase(); }
