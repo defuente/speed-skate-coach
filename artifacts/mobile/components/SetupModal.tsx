@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { Athlete, SessionConfig, TRAINING_TYPES, TrainingType } from '@/types/training';
-import { getAthleteProfiles, upsertAthlete } from '@/utils/storage';
+import { getAthleteProfiles, getAthleteSessions, upsertAthlete } from '@/utils/storage';
 
 interface Props {
   visible: boolean;
@@ -33,6 +33,7 @@ export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
   const [distanceStr, setDistanceStr] = useState('400');
   const [targetLapCountStr, setTargetLapCountStr] = useState('');
   const [targetStr, setTargetStr] = useState('');
+  const [previousConfigLoaded, setPreviousConfigLoaded] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -43,6 +44,7 @@ export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
     setDistanceStr(String(defaults.distancePerLap));
     setTargetLapCountStr(defaults.targetLapCount ? String(defaults.targetLapCount) : '');
     setTargetStr(defaults.targetLapTimeMs ? (defaults.targetLapTimeMs / 1000).toFixed(2) : '');
+    setPreviousConfigLoaded(false);
 
     getAthleteProfiles().then(profiles => {
       setAthletes(profiles);
@@ -56,14 +58,31 @@ export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
 
   const handleAthleteTextChange = (value: string) => {
     setAthleteName(value);
+    setPreviousConfigLoaded(false);
     const key = value.trim().toLocaleLowerCase();
     const existing = athletes.find(athlete => athlete.name.trim().toLocaleLowerCase() === key);
     setAthleteId(existing?.id);
   };
 
-  const selectAthlete = (athlete: Athlete) => {
+  const selectAthlete = async (athlete: Athlete) => {
     setAthleteId(athlete.id);
     setAthleteName(athlete.name);
+    setPreviousConfigLoaded(false);
+
+    const sessions = await getAthleteSessions(athlete.id);
+    const lastSession = [...sessions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    )[0];
+
+    if (!lastSession) return;
+
+    setTrainingType(lastSession.trainingType);
+    setDistanceStr(String(lastSession.distancePerLap));
+    setTargetLapCountStr(lastSession.targetLapCount ? String(lastSession.targetLapCount) : '');
+    setTargetStr(
+      lastSession.targetLapTimeMs ? (lastSession.targetLapTimeMs / 1000).toFixed(2) : '',
+    );
+    setPreviousConfigLoaded(true);
   };
 
   const handleStart = async () => {
@@ -168,6 +187,20 @@ export function SetupModal({ visible, onClose, onStart, defaults }: Props) {
             returnKeyType="done"
           />
 
+          {previousConfigLoaded && (
+            <View
+              style={[
+                styles.previousConfigBanner,
+                { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}35` },
+              ]}
+            >
+              <Ionicons name="refresh-circle-outline" size={18} color={colors.primary} />
+              <Text style={[styles.previousConfigText, { color: colors.primary }]}>
+                Cargamos la configuración del último entrenamiento de {athleteName}. Puedes modificarla antes de iniciar.
+              </Text>
+            </View>
+          )}
+
           <Text style={[styles.label, { color: colors.mutedForeground }]}>TIPO DE ENTRENAMIENTO</Text>
           <View style={styles.typeWrap}>
             {TRAINING_TYPES.map(type => (
@@ -269,6 +302,8 @@ const styles = StyleSheet.create({
   athleteChipText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   orText: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular' },
+  previousConfigBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1, borderRadius: 10, padding: 10, marginTop: 4 },
+  previousConfigText: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17 },
   typeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typeBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5 },
   typeTxt: { fontSize: 14, fontFamily: 'Inter_500Medium' },
