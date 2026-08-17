@@ -39,182 +39,118 @@ El foco de esta versión fue mejorar el uso real durante pista: información cr�
   - tendencia de las últimas vueltas contra el objetivo.
 - Sin objetivo de tiempo funciona en modo **Ritmo libre** y muestra:
   - mejor vuelta;
-  - promedio;
-  - cantidad de vueltas;
-  - tendencia de las últimas vueltas respecto del promedio actual.
+  - tiempo promedio;
+  - vueltas registradas;
+  - tendencia de las últimas vueltas comparada con el promedio actual.
 
-### 4. Vueltas objetivo y cumplimiento de volumen
+### 4. Volumen objetivo
 
-Se incorporó el concepto de **vueltas objetivo** para diferenciar el volumen asignado del volumen realmente completado.
+- Nueva configuración opcional de **vueltas objetivo**.
+- La cabecera fija muestra la vuelta actual, cantidad objetivo y porcentaje completado.
+- Barra compacta de progreso del volumen.
+- La sesión no se detiene automáticamente al cumplir la meta; permite registrar vueltas extra.
+- Al finalizar antes del objetivo se informa el porcentaje de volumen completado.
+- Diferenciación entre cumplimiento de ritmo y cumplimiento de volumen.
 
-- Campo opcional `Vueltas objetivo` al crear un entrenamiento.
-- Progreso integrado en la cabecera fija de la vuelta actual.
-- Ejemplo durante una sesión: `VUELTA 6 DE 10 · 50% COMPLETADO`.
-- Barra compacta de progreso de volumen.
-- La sesión no se detiene automáticamente al alcanzar el objetivo, permitiendo registrar vueltas adicionales.
-- Al finalizar antes del objetivo, la app informa el volumen alcanzado.
-- Persistencia de `targetLapCount` dentro de cada sesión histórica.
+### 5. Historial de sesiones
 
-#### Estados de volumen en Historial
+- Historial con filtro por deportista.
+- Tarjetas con tiempo, vueltas, volumen, mejor vuelta, ritmo y velocidad media.
+- Estado visible para sesiones con vueltas objetivo:
+  - **Cumplido**: vueltas reales = objetivo.
+  - **Sobrecumplido**: vueltas reales > objetivo.
+  - **Incompleto**: vueltas reales < objetivo.
+- Detalle completo de cada sesión y registro de vueltas.
 
-Cuando existe un objetivo de vueltas, cada sesión muestra junto al tipo de entrenamiento uno de estos estados:
+### 6. Ayuda contextual de métricas
 
-- **Cumplido**: vueltas reales = vueltas objetivo.
-- **Sobrecumplido**: vueltas reales > vueltas objetivo.
-- **Incompleto**: vueltas reales < vueltas objetivo.
+El detalle de sesión incorpora información contextual para explicar:
 
-El estado incluye las vueltas reales/objetivo para identificar rápidamente el resultado sin abrir la sesión.
+- cumplimiento de volumen;
+- mejor y peor vuelta;
+- cumplimiento de ritmo;
+- tiempo promedio;
+- consistencia;
+- velocidad media;
+- distancia total.
 
-### 5. Gestión de deportistas
+La métrica de **consistencia** corresponde al coeficiente de variación de los tiempos de vuelta: desviación estándar / tiempo promedio × 100. Un porcentaje menor representa un ritmo más regular.
 
-- Catálogo local persistente de deportistas.
-- Recuperación automática de nombres desde sesiones históricas existentes.
-- Selección rápida de un deportista guardado al iniciar un nuevo entrenamiento.
-- Prevención de duplicados por diferencias de mayúsculas/minúsculas.
-- Nueva pestaña **Deportistas**.
+### 7. Gestión de deportistas
+
+- Catálogo persistente de deportistas.
+- Selección de deportistas guardados al crear entrenamientos.
+- Pestaña de deportistas.
 - Perfil individual con:
   - sesiones;
-  - cantidad de vueltas;
+  - vueltas totales;
   - mejor vuelta;
-  - tiempo total;
-  - distancia acumulada;
+  - tiempo acumulado;
+  - distancia;
   - velocidad máxima;
-  - evolución de mejores vueltas;
-  - historial exclusivo del deportista.
-- Renombrado de deportistas actualizando también sus sesiones asociadas.
-- Eliminación con confirmación explícita.
+  - evolución de rendimiento.
+- Renombrar deportista actualiza sus sesiones asociadas.
+- Eliminar deportista elimina su perfil y sesiones asociadas con confirmación.
 
-### 6. Historial y detalle de sesiones
+### 8. Estadísticas
 
-- Historial con filtros por deportista.
-- Tarjetas de sesión con información de tiempo, vueltas, volumen, mejor vuelta, ritmo y velocidad media cuando corresponda.
-- Estados visuales de cumplimiento de volumen.
-- Detalle completo de cada sesión.
-- Ayuda contextual mediante iconos `ⓘ` para explicar las métricas principales:
-  - cumplimiento de volumen;
-  - mejor vuelta;
-  - peor vuelta;
-  - cumplimiento de ritmo;
-  - tiempo promedio;
-  - consistencia;
-  - velocidad media;
-  - distancia total.
-
-### 7. Interpretación de métricas
-
-#### Consistencia
-
-La consistencia se calcula como el **coeficiente de variación** de los tiempos de vuelta:
-
-`desviación estándar / tiempo promedio × 100`
-
-- `0%` representaría vueltas idénticas.
-- Un porcentaje menor indica un ritmo más regular.
-- Un porcentaje mayor indica mayor variación entre vueltas.
-
-#### Velocidad media
-
-La velocidad media se calcula como:
-
-`distancia total recorrida / tiempo acumulado`
-
-La app la presenta en `km/h`.
-
-### 8. Estadísticas y gráficos
-
-- Resumen de sesiones y vueltas.
-- Mejor vuelta global.
-- Velocidad máxima cuando existen datos de distancia.
-- Gráficos con mejor legibilidad para uso móvil.
-- Evolución de:
-  - mejor vuelta por sesión;
-  - velocidad media;
-  - vueltas por sesión;
-  - consistencia;
-  - cumplimiento de volumen.
-- Cumplimiento promedio de volumen.
-- Conteo de sesiones que completaron el volumen objetivo.
+- Estadísticas globales y por deportista.
+- Métricas de rendimiento y consistencia.
+- Evolución mediante gráficos.
+- Cumplimiento promedio de volumen para sesiones con vueltas objetivo.
+- Comparación de vueltas reales versus vueltas objetivo.
 
 ### 9. Exportación CSV
 
-- Exportación CSV de una sesión individual.
-- Exportación consolidada de sesiones por deportista desde Historial.
-- Inclusión de datos de objetivo y cumplimiento cuando existen.
-- Compatibilidad con Expo mediante `expo-file-system/legacy` y `expo-sharing`.
+- Exportación de sesiones individuales.
+- Exportación consolidada por deportista.
+- Datos de objetivo de tiempo y volumen incluidos en los archivos exportados.
 
-## Cambios de modelo de datos
+## Datos persistidos por sesión
 
-Durante v0.2 se incorporaron campos opcionales que mantienen compatibilidad con sesiones antiguas:
+Entre otros datos, una sesión puede almacenar:
 
-- `targetLapTimeMs`: objetivo de tiempo por vuelta.
-- `targetLapCount`: cantidad de vueltas objetivo de la sesión.
-- Persistencia del objetivo de tiempo también a nivel de vuelta para mantener contexto histórico.
+- deportista;
+- tipo de entrenamiento;
+- distancia por vuelta;
+- tiempo objetivo por vuelta;
+- vueltas objetivo;
+- vueltas realizadas;
+- tiempos individuales;
+- tiempo acumulado;
+- velocidad;
+- tiempo total.
 
-Las sesiones creadas antes de v0.2 continúan siendo legibles porque estos campos son opcionales.
+Los nuevos campos de v0.2 son opcionales, por lo que las sesiones antiguas siguen siendo compatibles.
 
-## Persistencia local
+## Empaquetado Android
 
-Los datos continúan almacenándose localmente mediante `AsyncStorage`:
+La aplicación Expo declara la versión **0.2.0** en `artifacts/mobile/app.json`.
 
-- sesiones;
-- configuración;
-- catálogo de deportistas.
+Se agregó `artifacts/mobile/eas.json` con:
 
-No se incluye todavía sincronización en nube ni cuentas multiusuario en v0.2.
+- perfil `preview` para generar un **APK instalable directamente en dispositivos Android**;
+- perfil `production` preparado para generar un **Android App Bundle (AAB)** cuando se publique en Google Play.
 
-## Correcciones técnicas relevantes
+## Validación
 
-- Corrección del tipado de la paleta de colores.
-- Compatibilidad de exportación CSV con la API legacy de Expo File System.
-- Ajustes de rutas tipadas de Expo Router para nuevas pantallas de deportistas.
-- Corrección de nodos de texto sueltos en componentes React Native.
-- Ajustes de layout para evitar que los controles queden detrás de la barra de navegación.
-- Reestructuración del scroll de entrenamiento para mantener fija la información crítica de la vuelta actual.
-- Mejoras de legibilidad en gráficos y tarjetas de estadísticas.
-
-## Validación realizada
-
-Durante el desarrollo de v0.2 se realizaron iteraciones de validación con:
+Durante el desarrollo de v0.2 se realizaron pruebas manuales frecuentes en Expo/Android y validaciones de TypeScript mediante:
 
 ```bash
 pnpm typecheck
 ```
 
-usando:
+La interfaz de cronómetro, objetivos, scroll, Vista de entrenador, historial y gestión de deportistas fue iterada a partir del uso en dispositivo.
 
-```bash
-tsc -p tsconfig.json --noEmit
-```
+El repositorio no posee actualmente checks automáticos obligatorios en GitHub, por lo que la validación de dispositivo y typecheck continúa siendo parte importante del flujo de desarrollo.
 
-También se realizaron pruebas manuales en Expo del flujo de entrenamiento, incluyendo:
+## Política de cierre
 
-- creación de sesiones;
-- selección de deportistas;
-- objetivos de tiempo;
-- objetivos de vueltas;
-- cumplimiento e incumplimiento;
-- sobrecumplimiento;
-- Vista de entrenador;
-- scroll durante entrenamiento;
-- historial;
-- perfil de deportistas;
-- detalle de sesión.
-
-## Alcance cerrado de v0.2
-
-A partir de este release no se agregarán nuevas funcionalidades a `develop-v0.2`. Solo deberían considerarse correcciones críticas si fueran necesarias.
-
-Las nuevas funcionalidades deben desarrollarse desde:
-
-`develop-v0.3`
-
-creada a partir del mismo commit estable utilizado para cerrar `v0.2.0`.
+- `main` representa la versión estable v0.2.0.
+- `develop-v0.2` queda congelada como referencia de esta versión.
+- El desarrollo posterior se realiza en `develop-v0.3`.
+- Nuevas funcionalidades no deben agregarse a v0.2 salvo correcciones críticas de mantenimiento.
 
 ## Próxima versión
 
-La versión **v0.3** queda reservada para nuevas capacidades y experimentación sin afectar la estabilidad alcanzada en v0.2.
-
----
-
-**Release:** `v0.2.0`  
-**Aplicación Expo:** `0.2.0`
+La siguiente línea de desarrollo es **v0.3**, iniciada desde el estado estable de v0.2.0.
