@@ -1,0 +1,120 @@
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useColors } from '@/hooks/useColors';
+import { Session } from '@/types/training';
+import { deleteAthlete, getAthleteSessions, renameAthlete } from '@/utils/storage';
+import { calculateStats, formatDateShort, formatTime } from '@/utils/calculations';
+import { SessionCard } from '@/components/SessionCard';
+
+export default function AthleteDetailScreen() {
+  const params = useLocalSearchParams<{ name: string }>();
+  const athleteName = Array.isArray(params.name) ? params.name[0] : params.name || '';
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editName, setEditName] = useState(athleteName);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    if (athleteName) setSessions(await getAthleteSessions(athleteName));
+  }, [athleteName]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const stats = useMemo(() => {
+    const allLaps = sessions.flatMap(session => session.laps);
+    const totalTime = sessions.reduce((sum, session) => sum + session.totalTime, 0);
+    const totalDistance = sessions.reduce((sum, session) => sum + (session.distancePerLap * session.laps.length) / 1000, 0);
+    const bestLap = allLaps.length ? Math.min(...allLaps.map(lap => lap.lapTime)) : 0;
+    const speeds = allLaps.map(lap => lap.speed ?? 0).filter(speed => speed > 0);
+    const maxSpeed = speeds.length ? Math.max(...speeds) : 0;
+    return { totalLaps: allLaps.length, totalTime, totalDistance, bestLap, maxSpeed };
+  }, [sessions]);
+
+  const evolutionSessions = [...sessions].reverse().slice(-10).filter(session => session.laps.length > 0);
+  const evolutionData = evolutionSessions.map(session => calculateStats(session.laps, session.distancePerLap).bestLap?.lapTime ?? 0);
+  const evolutionLabels = evolutionSessions.map(session => formatDateShort(session.date));
+
+  const handleRename = useCallback(async () => {
+    const cleanName = editName.trim();
+    if (!cleanName) return Alert.alert('Nombre requerido', 'Ingresa un nombre para el deportista.');
+    setSaving(true);
+    try {
+      await renameAthlete(athleteName, cleanName);
+      setEditVisible(false);
+      router.replace({ pathname: '/athlete/[name]', params: { name: cleanName } });
+    } catch {
+      Alert.alert('Error', 'No se pudo renombrar el deportista.');
+    } finally {
+      setSaving(false);
+    }
+  }, [athleteName, editName, router]);
+
+  const handleDelete = useCallback(() => {
+    Alert.alert('Eliminar deportista', `¿Eliminar a ${athleteName} y todas sus sesiones? Esta acción no se puede deshacer.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => { await deleteAthlete(athleteName); router.replace('/athletes'); } },
+    ]);
+  }, [athleteName, router]);
+
+  const webTop = Platform.OS === 'web' ? 67 : 0;
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + webTop + 12, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()}><Ionicons name="chevron-back" size={27} color={colors.foreground} /></TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{athleteName}</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => { setEditName(athleteName); setEditVisible(true); }} style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}><Ionicons name="pencil-outline" size={19} color={colors.primary} /></TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}><Ionicons name="trash-outline" size={19} color={colors.destructive} /></TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 28 }]}>
+        <View style={[styles.hero, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.avatar, { backgroundColor: `${colors.primary}18` }]}><Ionicons name="person" size={34} color={colors.primary} /></View>
+          <View style={styles.heroText}><Text style={[styles.name, { color: colors.foreground }]}>{athleteName}</Text><Text style={[styles.heroSub, { color: colors.mutedForeground }]}>{sessions.length} sesión{sessions.length !== 1 ? 'es' : ''} registradas</Text></View>
+        </View>
+
+        <View style={styles.grid}>
+          <StatCard icon="layers-outline" label="Sesiones" value={String(sessions.length)} colors={colors} />
+          <StatCard icon="flag-outline" label="Vueltas" value={String(stats.totalLaps)} colors={colors} />
+          <StatCard icon="trophy-outline" label="Mejor vuelta" value={stats.bestLap ? formatTime(stats.bestLap) : '—'} colors={colors} accent={stats.bestLap ? colors.lapBest : undefined} />
+          <StatCard icon="time-outline" label="Tiempo total" value={formatTime(stats.totalTime)} colors={colors} />
+          <StatCard icon="navigate-outline" label="Distancia" value={`${stats.totalDistance.toFixed(2)} km`} colors={colors} />
+          <StatCard icon="speedometer-outline" label="Velocidad máx." value={stats.maxSpeed ? `${stats.maxSpeed.toFixed(1)} km/h` : '—'} colors={colors} accent={stats.maxSpeed ? colors.primary : undefined} />
+        </View>
+
+        {evolutionData.length > 1 && <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Evolución de mejor vuelta</Text><Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Últimas sesiones · menor tiempo es mejor</Text><PerformanceChart data={evolutionData} labels={evolutionLabels} colors={colors} /></View>}
+
+        <View style={styles.sessionsHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Sesiones</Text><Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>{sessions.length} en total</Text></View>
+        {sessions.length === 0 ? <View style={[styles.noSessions, { backgroundColor: colors.card, borderColor: colors.border }]}><Ionicons name="time-outline" size={36} color={colors.mutedForeground} /><Text style={[styles.noSessionsText, { color: colors.mutedForeground }]}>Este deportista todavía no tiene entrenamientos registrados.</Text></View> : sessions.map(session => <SessionCard key={session.id} session={session} onPress={() => router.push(`/session/${session.id}`)} />)}
+      </ScrollView>
+
+      <Modal visible={editVisible} transparent animationType="fade" onRequestClose={() => setEditVisible(false)}>
+        <View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.modalTitle, { color: colors.foreground }]}>Editar deportista</Text>
+          <Text style={[styles.modalText, { color: colors.mutedForeground }]}>El nuevo nombre se aplicará también a todas sus sesiones.</Text>
+          <TextInput autoFocus value={editName} onChangeText={setEditName} placeholder="Nombre del deportista" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} />
+          <View style={styles.modalActions}><TouchableOpacity disabled={saving} onPress={() => setEditVisible(false)} style={[styles.modalBtn, { backgroundColor: colors.secondary }]}><Text style={[styles.modalBtnText, { color: colors.foreground }]}>Cancelar</Text></TouchableOpacity><TouchableOpacity disabled={saving} onPress={handleRename} style={[styles.modalBtn, { backgroundColor: colors.primary }]}><Text style={[styles.modalBtnText, { color: colors.primaryForeground }]}>{saving ? 'Guardando…' : 'Guardar'}</Text></TouchableOpacity></View>
+        </View></View>
+      </Modal>
+    </View>
+  );
+}
+
+function StatCard({ icon, label, value, colors, accent }: { icon: any; label: string; value: string; colors: ReturnType<typeof useColors>; accent?: string }) {
+  return <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}><Ionicons name={icon} size={18} color={accent ?? colors.primary} /><Text style={[styles.statValue, { color: accent ?? colors.foreground }]}>{value}</Text><Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text></View>;
+}
+
+function PerformanceChart({ data, labels, colors }: { data: number[]; labels: string[]; colors: ReturnType<typeof useColors> }) {
+  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1, maxH = 145, minH = 32;
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chartScroll}><View style={styles.barsRow}>{data.map((value, index) => { const normalized = (value - min) / range; const height = maxH - normalized * (maxH - minH); const best = value === min; return <View key={`${labels[index]}-${index}`} style={styles.barCol}><Text style={[styles.barValue, { color: best ? colors.lapBest : colors.foreground }]}>{formatTime(value)}</Text><View style={[styles.barTrack, { height: maxH }]}><View style={[styles.bar, { height, backgroundColor: best ? colors.lapBest : `${colors.primary}75` }]} /></View><Text style={[styles.barLabel, { color: colors.mutedForeground }]}>{labels[index]}</Text></View>; })}</View></ScrollView>;
+}
+
+const styles = StyleSheet.create({
+  container:{flex:1}, header:{flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:14,paddingBottom:12,borderBottomWidth:StyleSheet.hairlineWidth}, headerTitle:{flex:1,fontSize:18,fontFamily:'Inter_700Bold'}, headerActions:{flexDirection:'row',gap:8}, iconBtn:{width:38,height:38,borderRadius:10,borderWidth:StyleSheet.hairlineWidth,alignItems:'center',justifyContent:'center'}, scroll:{paddingTop:14,gap:12}, hero:{marginHorizontal:16,borderRadius:14,borderWidth:StyleSheet.hairlineWidth,padding:16,flexDirection:'row',alignItems:'center',gap:13}, avatar:{width:58,height:58,borderRadius:29,alignItems:'center',justifyContent:'center'}, heroText:{flex:1}, name:{fontSize:22,fontFamily:'Inter_700Bold'}, heroSub:{fontSize:12,fontFamily:'Inter_400Regular',marginTop:3}, grid:{marginHorizontal:16,flexDirection:'row',flexWrap:'wrap',gap:10}, statCard:{width:'48%',borderRadius:12,borderWidth:StyleSheet.hairlineWidth,padding:13,gap:4}, statValue:{fontSize:17,fontFamily:'Inter_700Bold',fontVariant:['tabular-nums']}, statLabel:{fontSize:10,fontFamily:'Inter_400Regular'}, chartCard:{marginHorizontal:16,borderRadius:14,borderWidth:StyleSheet.hairlineWidth,padding:16}, sectionTitle:{fontSize:17,fontFamily:'Inter_700Bold'}, sectionSub:{fontSize:11,fontFamily:'Inter_400Regular',marginTop:2}, chartScroll:{paddingTop:16,paddingRight:8}, barsRow:{flexDirection:'row',alignItems:'flex-end',gap:10}, barCol:{width:66,alignItems:'center',gap:7}, barValue:{fontSize:11,fontFamily:'Inter_600SemiBold',fontVariant:['tabular-nums']}, barTrack:{width:44,justifyContent:'flex-end'}, bar:{width:'100%',borderRadius:6}, barLabel:{fontSize:10,fontFamily:'Inter_500Medium'}, sessionsHeader:{marginHorizontal:16,marginTop:4,flexDirection:'row',alignItems:'flex-end',justifyContent:'space-between'}, noSessions:{marginHorizontal:16,padding:24,borderRadius:14,borderWidth:StyleSheet.hairlineWidth,alignItems:'center',gap:8}, noSessionsText:{fontSize:13,fontFamily:'Inter_400Regular',textAlign:'center'}, modalBackdrop:{flex:1,backgroundColor:'rgba(0,0,0,0.45)',justifyContent:'center',padding:22}, modalCard:{borderRadius:16,borderWidth:StyleSheet.hairlineWidth,padding:18,gap:12}, modalTitle:{fontSize:19,fontFamily:'Inter_700Bold'}, modalText:{fontSize:12,fontFamily:'Inter_400Regular',lineHeight:18}, input:{borderWidth:1,borderRadius:10,paddingHorizontal:14,paddingVertical:12,fontSize:16,fontFamily:'Inter_400Regular'}, modalActions:{flexDirection:'row',gap:10,marginTop:4}, modalBtn:{flex:1,alignItems:'center',paddingVertical:12,borderRadius:10}, modalBtnText:{fontSize:14,fontFamily:'Inter_600SemiBold'}
+});
