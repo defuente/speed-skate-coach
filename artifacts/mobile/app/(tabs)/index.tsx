@@ -31,7 +31,7 @@ export default function CronometroScreen() {
   } = useTraining();
 
   const [showSetup, setShowSetup] = useState(false);
-  const lapListRef = useRef<FlatList>(null);
+  const trainingListRef = useRef<FlatList<Lap>>(null);
 
   const isIdle = timerState === 'idle';
   const isRunning = timerState === 'running';
@@ -69,7 +69,7 @@ export default function CronometroScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setTimeout(() => {
       try {
-        lapListRef.current?.scrollToIndex({ index: 0, animated: true });
+        trainingListRef.current?.scrollToIndex({ index: 0, animated: true, viewPosition: 0 });
       } catch {}
     }, 100);
   }, [addLap]);
@@ -118,9 +118,10 @@ export default function CronometroScreen() {
 
   const targetStatusColor = currentOnTarget ? colors.lapBest : colors.lapWorst;
   const targetStatusBackground = currentOnTarget ? `${colors.lapBest}16` : `${colors.lapWorst}16`;
+  const reversedLaps = [...laps].reverse();
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: webTop }]}>
+  const trainingHeader = (
+    <>
       <View style={[styles.timerZone, { paddingTop: isActive ? insets.top + 8 : insets.top + 36 }]}>
         {isActive && (
           <Text style={[styles.sessionMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -232,38 +233,50 @@ export default function CronometroScreen() {
       )}
 
       {laps.length > 0 && (
-        <View style={styles.lapsSection}>
-          <View style={[styles.lapsHead, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 34 }]}>V</Text>
-            <Text style={[styles.lhTxt, { color: colors.mutedForeground, flex: 1 }]}>Vuelta</Text>
-            <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 76, textAlign: 'right' }]}>Total</Text>
-            {sessionConfig.distancePerLap > 0 && (
-              <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 68, textAlign: 'right' }]}>Vel.</Text>
-            )}
-            <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 68, textAlign: 'right' }]}>
-              {hasTimeTarget ? 'Objetivo' : 'Δ'}
-            </Text>
-          </View>
-          <FlatList
-            ref={lapListRef}
-            data={[...laps].reverse()}
-            keyExtractor={item => String(item.number)}
-            renderItem={({ item }) => (
-              <LapRow
-                lap={item}
-                isBest={item.number === stats.bestLap?.number}
-                isWorst={item.number === stats.worstLap?.number}
-                distancePerLap={sessionConfig.distancePerLap}
-                avgLapTime={stats.averageLapTime}
-                targetLapTimeMs={targetLapTimeMs}
-              />
-            )}
-            showsVerticalScrollIndicator={false}
-          />
+        <View style={[styles.lapsHead, { borderBottomColor: colors.border, borderTopColor: colors.border }]}>
+          <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 34 }]}>V</Text>
+          <Text style={[styles.lhTxt, { color: colors.mutedForeground, flex: 1 }]}>Vuelta</Text>
+          <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 76, textAlign: 'right' }]}>Total</Text>
+          {sessionConfig.distancePerLap > 0 && (
+            <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 68, textAlign: 'right' }]}>Vel.</Text>
+          )}
+          <Text style={[styles.lhTxt, { color: colors.mutedForeground, width: 68, textAlign: 'right' }]}>
+            {hasTimeTarget ? 'Objetivo' : 'Δ'}
+          </Text>
         </View>
       )}
+    </>
+  );
 
-      <View style={[styles.btns, { paddingBottom: bottomNavSpace }]}>
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: webTop }]}>
+      <FlatList
+        ref={trainingListRef}
+        style={styles.trainingList}
+        data={reversedLaps}
+        keyExtractor={item => String(item.number)}
+        renderItem={({ item }) => (
+          <LapRow
+            lap={item}
+            isBest={item.number === stats.bestLap?.number}
+            isWorst={item.number === stats.worstLap?.number}
+            distancePerLap={sessionConfig.distancePerLap}
+            avgLapTime={stats.averageLapTime}
+            targetLapTimeMs={targetLapTimeMs}
+          />
+        )}
+        ListHeaderComponent={trainingHeader}
+        contentContainerStyle={styles.trainingListContent}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        onScrollToIndexFailed={({ index }) => {
+          setTimeout(() => {
+            trainingListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
+          }, 150);
+        }}
+      />
+
+      <View style={[styles.btns, { paddingBottom: bottomNavSpace, borderTopColor: colors.border, backgroundColor: colors.background }]}>
         {isIdle && (
           <TouchableOpacity style={[styles.bigBtn, { backgroundColor: colors.primary }]} onPress={() => setShowSetup(true)}>
             <Ionicons name="play" size={23} color={colors.primaryForeground} />
@@ -522,6 +535,8 @@ function formatSignedDelta(ms: number): string {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  trainingList: { flex: 1 },
+  trainingListContent: { paddingBottom: 12 },
   timerZone: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 8 },
   sessionMeta: { fontSize: 12, fontFamily: 'Inter_500Medium', marginBottom: 5 },
   timer: { fontSize: 56, fontFamily: 'Inter_700Bold', letterSpacing: -2, fontVariant: ['tabular-nums'] },
@@ -570,10 +585,9 @@ const styles = StyleSheet.create({
   chipVal: { fontSize: 13, fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'] },
   chipLbl: { fontSize: 9, fontFamily: 'Inter_400Regular' },
   div: { width: 1, height: 26 },
-  lapsSection: { flex: 1 },
-  lapsHead: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, gap: 8 },
+  lapsHead: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, gap: 8 },
   lhTxt: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 },
-  btns: { paddingHorizontal: 14, paddingTop: 8, gap: 8 },
+  btns: { paddingHorizontal: 14, paddingTop: 8, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
   bigBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 14 },
   bigBtnTxt: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   actionRow: { flexDirection: 'row', gap: 10 },
