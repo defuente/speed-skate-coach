@@ -202,13 +202,15 @@ export default function CronometroScreen() {
         />
       )}
 
-      {isActive && hasTimeTarget && (
+      {isActive && (
         <LiveCoachPanel
           laps={laps}
-          target={targetLapTimeMs!}
+          target={targetLapTimeMs}
           lapsOnTarget={stats.lapsOnTarget}
           lapsMissedTarget={lapsMissedTarget}
           compliance={stats.targetCompliance}
+          averageLapTime={stats.averageLapTime}
+          bestLapTime={stats.bestLap?.lapTime}
           colors={colors}
         />
       )}
@@ -375,49 +377,101 @@ function LiveCoachPanel({
   lapsOnTarget,
   lapsMissedTarget,
   compliance,
+  averageLapTime,
+  bestLapTime,
   colors,
 }: {
   laps: Lap[];
-  target: number;
+  target?: number;
   lapsOnTarget: number;
   lapsMissedTarget: number;
   compliance: number;
+  averageLapTime: number;
+  bestLapTime?: number;
   colors: ReturnType<typeof useColors>;
 }) {
+  const hasTarget = !!target && target > 0;
   const recent = laps.slice(-5);
+
   return (
     <View style={[styles.coachPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.coachSummaryRow}>
         <View style={styles.coachTargetBlock}>
-          <Text style={[styles.coachEyebrow, { color: colors.mutedForeground }]}>VISTA DE ENTRENADOR · OBJETIVO / VUELTA</Text>
-          <Text style={[styles.coachTargetValue, { color: colors.primary }]}>{formatTime(target)}</Text>
+          <Text style={[styles.coachEyebrow, { color: colors.mutedForeground }]}>
+            {hasTarget ? 'VISTA DE ENTRENADOR · OBJETIVO / VUELTA' : 'VISTA DE ENTRENADOR · RITMO LIBRE'}
+          </Text>
+          <Text style={[styles.coachTargetValue, { color: colors.primary }]}>
+            {hasTarget ? formatTime(target!) : 'Sin objetivo de tiempo'}
+          </Text>
         </View>
-        <View style={styles.coachCounters}>
-          <CoachCounter icon="checkmark" value={lapsOnTarget} label="cumplidas" color={colors.lapBest} textColor={colors.mutedForeground} />
-          <CoachCounter icon="close" value={lapsMissedTarget} label="fuera" color={colors.lapWorst} textColor={colors.mutedForeground} />
-          <CoachCounter icon="analytics-outline" value={`${Math.round(compliance)}%`} label="cumplimiento" color={colors.primary} textColor={colors.mutedForeground} />
-        </View>
+
+        {hasTarget ? (
+          <View style={styles.coachCounters}>
+            <CoachCounter icon="checkmark" value={lapsOnTarget} label="cumplidas" color={colors.lapBest} textColor={colors.mutedForeground} />
+            <CoachCounter icon="close" value={lapsMissedTarget} label="fuera" color={colors.lapWorst} textColor={colors.mutedForeground} />
+            <CoachCounter icon="analytics-outline" value={`${Math.round(compliance)}%`} label="cumplimiento" color={colors.primary} textColor={colors.mutedForeground} />
+          </View>
+        ) : (
+          <View style={styles.coachCounters}>
+            <CoachCounter
+              icon="trophy-outline"
+              value={bestLapTime ? formatTime(bestLapTime) : '—'}
+              label="mejor"
+              color={colors.lapBest}
+              textColor={colors.mutedForeground}
+            />
+            <CoachCounter
+              icon="time-outline"
+              value={averageLapTime > 0 ? formatTime(averageLapTime) : '—'}
+              label="promedio"
+              color={colors.primary}
+              textColor={colors.mutedForeground}
+            />
+            <CoachCounter
+              icon="flag-outline"
+              value={laps.length}
+              label="vueltas"
+              color={colors.foreground}
+              textColor={colors.mutedForeground}
+            />
+          </View>
+        )}
       </View>
 
-      {recent.length > 0 && (
+      {recent.length > 0 ? (
         <View style={[styles.trendSection, { borderTopColor: colors.border }]}>
           <Text style={[styles.coachEyebrow, { color: colors.mutedForeground }]}>ÚLTIMAS VUELTAS</Text>
           <View style={styles.trendRow}>
             {recent.map(lap => {
-              const onTarget = isLapOnTarget(lap.lapTime, target);
-              const delta = lap.lapTime - target;
-              const color = onTarget ? colors.lapBest : colors.lapWorst;
+              const reference = hasTarget ? target! : averageLapTime;
+              const delta = reference > 0 ? lap.lapTime - reference : 0;
+              const good = hasTarget ? isLapOnTarget(lap.lapTime, target) : delta <= 0;
+              const color = good ? colors.lapBest : colors.lapWorst;
+
               return (
                 <View key={lap.number} style={styles.trendItem}>
                   <View style={[styles.trendCircle, { backgroundColor: `${color}1F`, borderColor: `${color}66` }]}>
-                    <Ionicons name={onTarget ? 'checkmark' : 'close'} size={15} color={color} />
+                    <Ionicons name={good ? 'checkmark' : 'arrow-up'} size={15} color={color} />
                   </View>
                   <Text style={[styles.trendLap, { color: colors.mutedForeground }]}>V{lap.number}</Text>
-                  <Text style={[styles.trendDelta, { color }]}>{formatSignedDelta(delta)}</Text>
+                  <Text style={[styles.trendDelta, { color }]}>
+                    {hasTarget || averageLapTime > 0 ? formatSignedDelta(delta) : formatTime(lap.lapTime)}
+                  </Text>
                 </View>
               );
             })}
           </View>
+          {!hasTarget && (
+            <Text style={[styles.coachReferenceHint, { color: colors.mutedForeground }]}>
+              Sin objetivo de tiempo, la tendencia se compara con el promedio actual.
+            </Text>
+          )}
+        </View>
+      ) : (
+        <View style={[styles.trendSection, { borderTopColor: colors.border }]}>
+          <Text style={[styles.coachReferenceHint, { color: colors.mutedForeground }]}>
+            Registra la primera vuelta para comenzar el análisis en vivo.
+          </Text>
         </View>
       )}
     </View>
@@ -442,7 +496,7 @@ function CoachCounter({
       <View style={[styles.coachCounterIcon, { backgroundColor: `${color}18` }]}>
         <Ionicons name={icon} size={13} color={color} />
       </View>
-      <Text style={[styles.coachCounterValue, { color }]}>{value}</Text>
+      <Text style={[styles.coachCounterValue, { color }]} numberOfLines={1}>{value}</Text>
       <Text style={[styles.coachCounterLabel, { color: textColor }]}>{label}</Text>
     </View>
   );
@@ -499,11 +553,12 @@ const styles = StyleSheet.create({
   coachTargetBlock: { flex: 1, gap: 2 },
   coachEyebrow: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.7 },
   coachTargetValue: { fontSize: 18, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] },
-  coachCounters: { flexDirection: 'row', gap: 9 },
-  coachCounter: { alignItems: 'center', minWidth: 45 },
+  coachCounters: { flexDirection: 'row', gap: 7, flexShrink: 1 },
+  coachCounter: { alignItems: 'center', minWidth: 45, maxWidth: 72 },
   coachCounterIcon: { width: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-  coachCounterValue: { fontSize: 13, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] },
+  coachCounterValue: { fontSize: 11, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'], maxWidth: 72 },
   coachCounterLabel: { fontSize: 7, fontFamily: 'Inter_500Medium' },
+  coachReferenceHint: { fontSize: 9, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   trendSection: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, gap: 6 },
   trendRow: { flexDirection: 'row', justifyContent: 'space-between' },
   trendItem: { alignItems: 'center', minWidth: 48, gap: 2 },
