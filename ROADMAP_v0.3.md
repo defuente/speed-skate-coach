@@ -68,14 +68,27 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Definir documento de contrato de datos local/nube en `DATA_CONTRACT_v0.4.md`.
 - [x] Documentar estrategia offline-first y manejo inicial de conflictos para v0.4.
 
+## 8. Mejoras de flujo y presentación
+
+- [x] Al seleccionar un deportista guardado para un nuevo entrenamiento, precargar la configuración de su sesión más reciente.
+- [x] Precargar tipo de entrenamiento, distancia por vuelta, vueltas objetivo y tiempo objetivo, manteniendo los campos editables.
+- [x] Filtrar el historial de sesiones por deportista mediante selección rápida.
+- [x] Mantener opción `Todos` para volver al historial completo.
+- [x] Eliminar de Ajustes las instrucciones técnicas para generar APK.
+- [x] Mostrar el logo real de PatinCrono en `Acerca de`.
+- [x] Mostrar la versión de la aplicación desde la configuración Expo.
+- [x] Incorporar autoría de la aplicación en `Acerca de`.
+
 ## Pendientes para cerrar v0.3
 
 1. Ejecutar `pnpm typecheck` en el entorno local.
 2. Probar migración con datos reales existentes del usuario.
 3. Validar edición/renombre de un deportista y conservación de sus sesiones.
 4. Validar filtros, gráficos y comparación con al menos dos sesiones comparables.
-5. Decidir después de la prueba si el récord personal requiere filtro adicional por tipo de entrenamiento.
-6. Corregir cualquier hallazgo de prueba.
-7. Generar APK de validación v0.3.
-8. Crear release notes y cerrar v0.3.
-9. Abrir `develop-v0.4` para nube + portal web.
+5. Validar precarga de la configuración del último entrenamiento al seleccionar un deportista.
+6. Validar filtro por deportista en Historial.
+7. Decidir después de la prueba si el récord personal requiere filtro adicional por tipo de entrenamiento.
+8. Corregir cualquier hallazgo de prueba.
+9. Generar APK de validación v0.3.
+10. Crear release notes y cerrar v0.3.
+11. Abrir `develop-v0.4` para nube + portal web.
