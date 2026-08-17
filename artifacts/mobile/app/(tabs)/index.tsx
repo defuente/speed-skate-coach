@@ -52,8 +52,13 @@ export default function CronometroScreen() {
   const volumeCompliance = hasVolumeTarget
     ? Math.min(100, (laps.length / targetLapCount!) * 100)
     : 0;
-  const remainingLaps = hasVolumeTarget ? Math.max(0, targetLapCount! - laps.length) : 0;
   const volumeComplete = hasVolumeTarget && laps.length >= targetLapCount!;
+  const currentLapNumber = laps.length + 1;
+  const volumeProgressText = hasVolumeTarget
+    ? volumeComplete
+      ? `VUELTA ${currentLapNumber} · OBJETIVO ${targetLapCount} CUMPLIDO · 100%`
+      : `VUELTA ${currentLapNumber} DE ${targetLapCount} · ${Math.round(volumeCompliance)}% COMPLETADO`
+    : `VUELTA ${currentLapNumber}`;
 
   const webTop = Platform.OS === 'web' ? 67 : 0;
   const bottomNavSpace = Platform.OS === 'web' ? 92 : Math.max(insets.bottom, 10) + 72;
@@ -118,7 +123,22 @@ export default function CronometroScreen() {
 
   const targetStatusColor = currentOnTarget ? colors.lapBest : colors.lapWorst;
   const targetStatusBackground = currentOnTarget ? `${colors.lapBest}16` : `${colors.lapWorst}16`;
+  const volumeStatusColor = volumeComplete ? colors.lapBest : colors.primary;
   const reversedLaps = [...laps].reverse();
+
+  const miniVolumeProgress = hasVolumeTarget ? (
+    <View style={[styles.miniVolumeTrack, { backgroundColor: colors.muted }]}>
+      <View
+        style={[
+          styles.miniVolumeFill,
+          {
+            width: `${volumeCompliance}%`,
+            backgroundColor: volumeStatusColor,
+          },
+        ]}
+      />
+    </View>
+  ) : null;
 
   const fixedTimerHeader = (
     <View
@@ -166,7 +186,15 @@ export default function CronometroScreen() {
                   ]}
                 >
                   <View style={styles.currentLapHeader}>
-                    <Text style={[styles.lapLabel, { color: colors.mutedForeground }]}>VUELTA {laps.length + 1}</Text>
+                    <Text
+                      style={[
+                        styles.lapLabel,
+                        { color: volumeComplete ? colors.lapBest : colors.mutedForeground },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {volumeProgressText}
+                    </Text>
                     <View style={[styles.liveStatusPill, { backgroundColor: `${targetStatusColor}22` }]}>
                       <Ionicons
                         name={currentOnTarget ? 'checkmark-circle' : 'alert-circle'}
@@ -185,11 +213,21 @@ export default function CronometroScreen() {
                       : `Exceso ${formatCompactDelta(Math.abs(currentDelta))}`}
                     {' · '}Objetivo {formatTime(targetLapTimeMs!)}
                   </Text>
+                  {miniVolumeProgress}
                 </View>
               ) : (
                 <View style={styles.lapInfoRow}>
-                  <Text style={[styles.lapLabel, { color: colors.mutedForeground }]}>VUELTA {laps.length + 1}</Text>
+                  <Text
+                    style={[
+                      styles.lapLabel,
+                      { color: volumeComplete ? colors.lapBest : colors.mutedForeground },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {volumeProgressText}
+                  </Text>
                   <Text style={[styles.lapClock, { color: colors.primary }]}>{formatTime(currentLapTime)}</Text>
+                  {miniVolumeProgress}
                 </View>
               )
             )}
@@ -204,17 +242,6 @@ export default function CronometroScreen() {
 
   const trainingHeader = (
     <>
-      {isActive && hasVolumeTarget && (
-        <VolumeTargetPanel
-          actual={laps.length}
-          target={targetLapCount!}
-          compliance={volumeCompliance}
-          remaining={remainingLaps}
-          complete={volumeComplete}
-          colors={colors}
-        />
-      )}
-
       {isActive && (
         <LiveCoachPanel
           laps={laps}
@@ -352,48 +379,6 @@ export default function CronometroScreen() {
           distancePerLap: settings.defaultDistancePerLap,
         }}
       />
-    </View>
-  );
-}
-
-function VolumeTargetPanel({
-  actual,
-  target,
-  compliance,
-  remaining,
-  complete,
-  colors,
-}: {
-  actual: number;
-  target: number;
-  compliance: number;
-  remaining: number;
-  complete: boolean;
-  colors: ReturnType<typeof useColors>;
-}) {
-  const statusColor = complete ? colors.lapBest : colors.primary;
-  return (
-    <View style={[styles.volumePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.volumeHeader}>
-        <View>
-          <Text style={[styles.coachEyebrow, { color: colors.mutedForeground }]}>VOLUMEN OBJETIVO</Text>
-          <Text style={[styles.volumeValue, { color: statusColor }]}>{actual} / {target} vueltas</Text>
-        </View>
-        <View style={[styles.volumeStatusPill, { backgroundColor: `${statusColor}18` }]}>
-          <Ionicons name={complete ? 'checkmark-circle' : 'flag-outline'} size={15} color={statusColor} />
-          <Text style={[styles.volumeStatusText, { color: statusColor }]}>
-            {complete ? 'OBJETIVO CUMPLIDO' : `${Math.round(compliance)}%`}
-          </Text>
-        </View>
-      </View>
-      <View style={[styles.volumeTrack, { backgroundColor: colors.muted }]}>
-        <View style={[styles.volumeFill, { width: `${Math.min(100, compliance)}%`, backgroundColor: statusColor }]} />
-      </View>
-      <Text style={[styles.volumeHint, { color: colors.mutedForeground }]}>
-        {complete
-          ? 'Puedes seguir registrando vueltas extra.'
-          : `Faltan ${remaining} vuelta${remaining !== 1 ? 's' : ''} para completar el volumen.`}
-      </Text>
     </View>
   );
 }
@@ -561,23 +546,17 @@ const styles = StyleSheet.create({
   volumeFinishedText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   prTxt: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   targetLapBox: { width: '100%', marginTop: 6, padding: 9, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
-  currentLapHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  lapLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.1 },
+  currentLapHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  lapLabel: { flexShrink: 1, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.7 },
   liveStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   liveStatusText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
   targetLapClock: { fontSize: 28, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] },
   targetDeltaText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  lapInfoRow: { alignItems: 'center', marginTop: 6, gap: 1 },
+  lapInfoRow: { width: '100%', alignItems: 'center', marginTop: 6, gap: 3, paddingHorizontal: 8 },
   lapClock: { fontSize: 23, fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'] },
+  miniVolumeTrack: { width: '100%', height: 4, borderRadius: 2, overflow: 'hidden', marginTop: 3 },
+  miniVolumeFill: { height: '100%', borderRadius: 2 },
   idleHint: { fontSize: 14, fontFamily: 'Inter_400Regular', marginTop: 5 },
-  volumePanel: { marginHorizontal: 14, borderRadius: 12, padding: 10, borderWidth: StyleSheet.hairlineWidth, marginBottom: 7, gap: 7 },
-  volumeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  volumeValue: { fontSize: 18, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] },
-  volumeStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12 },
-  volumeStatusText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
-  volumeTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  volumeFill: { height: '100%', borderRadius: 3 },
-  volumeHint: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   coachPanel: { marginHorizontal: 14, borderRadius: 12, padding: 11, borderWidth: StyleSheet.hairlineWidth, marginBottom: 7, gap: 9 },
   coachSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   coachTargetBlock: { flex: 1, gap: 2 },
