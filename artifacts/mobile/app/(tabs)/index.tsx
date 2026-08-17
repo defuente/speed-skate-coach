@@ -120,8 +120,16 @@ export default function CronometroScreen() {
   const targetStatusBackground = currentOnTarget ? `${colors.lapBest}16` : `${colors.lapWorst}16`;
   const reversedLaps = [...laps].reverse();
 
-  const trainingHeader = (
-    <>
+  const fixedTimerHeader = (
+    <View
+      style={[
+        styles.fixedTimerShell,
+        {
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        },
+      ]}
+    >
       <View style={[styles.timerZone, { paddingTop: isActive ? insets.top + 8 : insets.top + 36 }]}>
         {isActive && (
           <Text style={[styles.sessionMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -191,7 +199,11 @@ export default function CronometroScreen() {
           </>
         )}
       </View>
+    </View>
+  );
 
+  const trainingHeader = (
+    <>
       {isActive && hasVolumeTarget && (
         <VolumeTargetPanel
           actual={laps.length}
@@ -250,6 +262,8 @@ export default function CronometroScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: webTop }]}>
+      {fixedTimerHeader}
+
       <FlatList
         ref={trainingListRef}
         style={styles.trainingList}
@@ -535,8 +549,9 @@ function formatSignedDelta(ms: number): string {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  fixedTimerShell: { borderBottomWidth: StyleSheet.hairlineWidth },
   trainingList: { flex: 1 },
-  trainingListContent: { paddingBottom: 12 },
+  trainingListContent: { paddingTop: 8, paddingBottom: 12 },
   timerZone: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 8 },
   sessionMeta: { fontSize: 12, fontFamily: 'Inter_500Medium', marginBottom: 5 },
   timer: { fontSize: 56, fontFamily: 'Inter_700Bold', letterSpacing: -2, fontVariant: ['tabular-nums'] },
