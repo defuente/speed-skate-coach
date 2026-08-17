@@ -51,6 +51,43 @@ const METRICS: { key: AthleteMetric; label: string; lowerIsBetter: boolean }[] =
   { key: 'volumeCompliance', label: 'Volumen', lowerIsBetter: false },
 ];
 
+function formatBirthDateDisplay(value?: string): string {
+  if (!value) return '';
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  return value;
+}
+
+function maskBirthDateInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function parseBirthDateInput(value: string): string | undefined | null {
+  const clean = value.trim();
+  if (!clean) return undefined;
+
+  const match = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export default function AthleteDetailScreen() {
   const params = useLocalSearchParams<{ name: string }>();
   const identifier = Array.isArray(params.name) ? params.name[0] : params.name || '';
@@ -208,7 +245,7 @@ export default function AthleteDetailScreen() {
   const openEdit = () => {
     if (!athlete) return;
     setEditName(athlete.name);
-    setEditBirthDate(athlete.birthDate ?? '');
+    setEditBirthDate(formatBirthDateDisplay(athlete.birthDate));
     setEditCategory(athlete.category ?? '');
     setEditClub(athlete.club ?? '');
     setEditNotes(athlete.notes ?? '');
@@ -223,11 +260,20 @@ export default function AthleteDetailScreen() {
       return;
     }
 
+    const parsedBirthDate = parseBirthDateInput(editBirthDate);
+    if (parsedBirthDate === null) {
+      Alert.alert(
+        'Fecha inválida',
+        'Ingresa la fecha de nacimiento en formato dd/MM/yyyy. Ejemplo: 09/08/2019.',
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       const updated = await updateAthlete(athlete.id, {
         name: cleanName,
-        birthDate: editBirthDate.trim() || undefined,
+        birthDate: parsedBirthDate,
         category: editCategory.trim() || undefined,
         club: editClub.trim() || undefined,
         notes: editNotes.trim() || undefined,
@@ -331,7 +377,7 @@ export default function AthleteDetailScreen() {
         {(athlete.birthDate || athlete.category || athlete.club || athlete.notes) && (
           <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ficha del deportista</Text>
-            {athlete.birthDate && <ProfileRow icon="calendar-outline" label="Nacimiento" value={athlete.birthDate} colors={colors} />}
+            {athlete.birthDate && <ProfileRow icon="calendar-outline" label="Nacimiento" value={formatBirthDateDisplay(athlete.birthDate)} colors={colors} />}
             {athlete.category && <ProfileRow icon="ribbon-outline" label="Categoría" value={athlete.category} colors={colors} />}
             {athlete.club && <ProfileRow icon="shield-outline" label="Club / equipo" value={athlete.club} colors={colors} />}
             {athlete.notes && <ProfileRow icon="document-text-outline" label="Observaciones" value={athlete.notes} colors={colors} />}
@@ -437,7 +483,6 @@ export default function AthleteDetailScreen() {
           <View style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Lectura de la última sesión</Text>
             <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Comparación con la anterior de igual distancia y tipo cuando existe</Text>
-
             <View style={[styles.compareContext, { backgroundColor: colors.background }]}>
               <Text style={[styles.compareContextTitle, { color: colors.foreground }]}>{latestSession.trainingType} · {latestSession.distancePerLap} m/v</Text>
               <Text style={[styles.compareContextDate, { color: colors.mutedForeground }]}>{formatDateShort(latestSession.date)}{previousComparable ? ` vs ${formatDateShort(previousComparable.date)}` : ' · sin sesión comparable anterior'}</Text>
@@ -502,7 +547,15 @@ export default function AthleteDetailScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <ProfileInput label="NOMBRE" value={editName} onChangeText={setEditName} placeholder="Nombre" colors={colors} />
-              <ProfileInput label="FECHA DE NACIMIENTO" value={editBirthDate} onChangeText={setEditBirthDate} placeholder="Ej. 2019-08-09" colors={colors} />
+              <ProfileInput
+                label="FECHA DE NACIMIENTO"
+                value={editBirthDate}
+                onChangeText={value => setEditBirthDate(maskBirthDateInput(value))}
+                placeholder="dd/MM/yyyy"
+                keyboardType="number-pad"
+                maxLength={10}
+                colors={colors}
+              />
               <ProfileInput label="CATEGORÍA" value={editCategory} onChangeText={setEditCategory} placeholder="Ej. Mini / Infantil" colors={colors} />
               <ProfileInput label="CLUB / EQUIPO" value={editClub} onChangeText={setEditClub} placeholder="Ej. Colo Colo" colors={colors} />
               <ProfileInput label="OBSERVACIONES" value={editNotes} onChangeText={setEditNotes} placeholder="Notas del entrenador" colors={colors} multiline />
@@ -580,11 +633,42 @@ function ComparisonRow({ label, current, previous, delta, kind, lowerIsBetter = 
   );
 }
 
-function ProfileInput({ label, value, onChangeText, placeholder, colors, multiline = false }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; colors: ReturnType<typeof useColors>; multiline?: boolean }) {
+function ProfileInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  colors,
+  multiline = false,
+  keyboardType = 'default',
+  maxLength,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  colors: ReturnType<typeof useColors>;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'number-pad';
+  maxLength?: number;
+}) {
   return (
     <View style={styles.inputGroup}>
       <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.mutedForeground} multiline={multiline} style={[styles.input, multiline && styles.inputMultiline, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.mutedForeground}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        maxLength={maxLength}
+        style={[
+          styles.input,
+          multiline && styles.inputMultiline,
+          { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground },
+        ]}
+      />
     </View>
   );
 }
