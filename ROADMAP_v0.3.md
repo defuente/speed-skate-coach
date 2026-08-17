@@ -26,53 +26,56 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Resumen de sesiones, vueltas, tiempo y distancia.
 - [x] Cumplimiento medio de volumen.
 - [x] Cumplimiento medio de ritmo.
-- [x] Consistencia media.
+- [x] Consistencia media basada solo en sesiones con más de una vuelta.
 
 ## 3. Récords personales
 
 - [x] Récord personal separado por distancia de vuelta.
 - [x] No mezclar tiempos de pistas/distancias distintas.
-- [ ] Permitir filtrar récords por tipo de entrenamiento cuando sea necesario.
+- [ ] Evaluar después de pruebas si los récords necesitan además filtro por tipo de entrenamiento.
 
 ## 4. Analítica avanzada
 
 - [x] Centralizar cálculos de analítica en `utils/athleteAnalytics.ts`.
-- [x] Métricas disponibles: mejor vuelta, promedio, consistencia, velocidad media, ritmo y volumen.
-- [ ] Filtro por período: 30 / 90 días / todo.
-- [ ] Filtro por distancia de vuelta.
-- [ ] Filtro por tipo de entrenamiento.
-- [ ] Gráfico seleccionable por métrica.
-- [ ] Evitar comparaciones inválidas entre distancias diferentes.
+- [x] Métricas: mejor vuelta, promedio, consistencia, velocidad media, ritmo y volumen.
+- [x] Filtro por período: 30 / 90 días / todo.
+- [x] Filtro por distancia de vuelta.
+- [x] Filtro por tipo de entrenamiento.
+- [x] Gráfico seleccionable por métrica.
+- [x] Evitar comparaciones inválidas entre distancias diferentes.
 
 ## 5. Comparación de sesiones
 
-- [x] Lógica para localizar la sesión anterior comparable.
-- [x] Lógica para calcular diferencias entre métricas.
-- [x] Generador de conclusiones automáticas basadas en reglas.
-- [ ] Interfaz visual de comparación de dos sesiones.
-- [ ] Mostrar mejora/empeoramiento de promedio, consistencia y velocidad.
-- [ ] Mostrar diferencias de cumplimiento de ritmo y volumen cuando correspondan.
+- [x] Localizar la sesión anterior comparable.
+- [x] Exigir misma distancia y mismo tipo de entrenamiento para la comparación automática.
+- [x] Calcular diferencias entre métricas.
+- [x] Generar conclusiones automáticas basadas en reglas.
+- [x] Interfaz visual de comparación en la ficha del deportista.
+- [x] Mostrar mejora/empeoramiento de promedio, consistencia y velocidad.
+- [x] Mostrar diferencias de cumplimiento de ritmo y volumen cuando correspondan.
 
 ## 6. Exportación
 
 - [x] CSV individual por sesión.
 - [x] CSV consolidado por deportista.
-- [ ] Incorporar `athleteId` al modelo exportable para futura nube sin afectar la lectura humana del CSV.
+- [x] Incorporar `athleteId` al CSV sin eliminar el nombre legible del deportista.
 
 ## 7. Preparación para v0.4
 
 - [x] Versión explícita del esquema local para migración de deportistas.
 - [x] IDs permanentes para deportistas.
-- [ ] Revisar IDs permanentes de todas las entidades que se sincronizarán.
-- [ ] Definir documento de contrato de datos local/nube.
-- [ ] Documentar estrategia offline-first y conflictos para v0.4.
+- [x] Revisar IDs de entidades: `Athlete.id` y `Session.id` permanentes; vueltas identificadas por `(sessionId, number)`.
+- [x] Definir documento de contrato de datos local/nube en `DATA_CONTRACT_v0.4.md`.
+- [x] Documentar estrategia offline-first y manejo inicial de conflictos para v0.4.
 
-## Orden de trabajo restante
+## Pendientes para cerrar v0.3
 
-1. Filtros y gráfico de evolución por métrica.
-2. Comparación visual de sesiones y conclusiones automáticas.
-3. Ajustes de exportación e IDs.
-4. Contrato de datos para v0.4.
-5. Pruebas de migración con datos existentes.
-6. Build APK de validación v0.3.
-7. Cierre, release notes y apertura de `develop-v0.4`.
+1. Ejecutar `pnpm typecheck` en el entorno local.
+2. Probar migración con datos reales existentes del usuario.
+3. Validar edición/renombre de un deportista y conservación de sus sesiones.
+4. Validar filtros, gráficos y comparación con al menos dos sesiones comparables.
+5. Decidir después de la prueba si el récord personal requiere filtro adicional por tipo de entrenamiento.
+6. Corregir cualquier hallazgo de prueba.
+7. Generar APK de validación v0.3.
+8. Crear release notes y cerrar v0.3.
+9. Abrir `develop-v0.4` para nube + portal web.
