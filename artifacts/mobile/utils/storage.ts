@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Athlete, AppSettings, Session } from '@/types/training';
+import { Athlete, AthleteCategoryHistoryEntry, AppSettings, Session } from '@/types/training';
 
 const SESSIONS_KEY = '@patincrono/sessions';
 const STORAGE_KEY = '@patincrono/storage';
 const LEGACY_ATHLETES_KEY = '@patincrono/athletes';
 const ATHLETES_V2_KEY = '@patincrono/athletes_v2';
 const SCHEMA_VERSION_KEY = '@patincrono/schema_version';
-const ATHLETE_SCHEMA_VERSION = '2';
+const ATHLETE_SCHEMA_VERSION = '3';
 
 interface StorageData {
   appSettings: AppSettings;
@@ -26,8 +26,83 @@ export function normalizeAthleteName(name: string): string {
   return name.trim().toLocaleLowerCase();
 }
 
+function normalizeCategory(category?: string): string | undefined {
+  const clean = category?.trim();
+  return clean || undefined;
+}
+
 function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createCategoryHistoryEntry(
+  category: string,
+  validFrom: string,
+): AthleteCategoryHistoryEntry {
+  return {
+    id: createId('cat'),
+    category,
+    validFrom,
+  };
+}
+
+function normalizeCategoryHistory(
+  history?: AthleteCategoryHistoryEntry[],
+): AthleteCategoryHistoryEntry[] {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter(
+      entry =>
+        entry &&
+        typeof entry.id === 'string' &&
+        typeof entry.category === 'string' &&
+        typeof entry.validFrom === 'string' &&
+        entry.category.trim(),
+    )
+    .map(entry => ({
+      ...entry,
+      category: entry.category.trim(),
+    }))
+    .sort((a, b) => new Date(a.validFrom).getTime() - new Date(b.validFrom).getTime());
+}
+
+export function getAthleteCategoryAtDate(
+  athlete: Athlete,
+  date: string,
+): string | undefined {
+  const timestamp = new Date(date).getTime();
+  if (!Number.isFinite(timestamp)) return undefined;
+
+  const history = normalizeCategoryHistory(athlete.categoryHistory);
+  const entry = [...history]
+    .reverse()
+    .find(item => {
+      const from = new Date(item.validFrom).getTime();
+      const to = item.validTo ? new Date(item.validTo).getTime() : Number.POSITIVE_INFINITY;
+      return Number.isFinite(from) && timestamp >= from && timestamp < to;
+    });
+
+  return entry?.category;
+}
+
+function applyCategoryChange(
+  current: Athlete,
+  nextCategory: string | undefined,
+  changedAt: string,
+): AthleteCategoryHistoryEntry[] {
+  const currentCategory = normalizeCategory(current.category);
+  const cleanNext = normalizeCategory(nextCategory);
+  const history = normalizeCategoryHistory(current.categoryHistory);
+
+  if (currentCategory === cleanNext) return history;
+
+  const closed = history.map(entry =>
+    !entry.validTo ? { ...entry, validTo: changedAt } : entry,
+  );
+
+  return cleanNext
+    ? [...closed, createCategoryHistoryEntry(cleanNext, changedAt)]
+    : closed;
 }
 
 function createAthlete(name: string): Athlete {
@@ -125,11 +200,23 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
       continue;
     }
 
+    const createdAt = profile.createdAt || new Date().toISOString();
+    const updatedAt = profile.updatedAt || createdAt;
+    const category = normalizeCategory(profile.category);
+    let categoryHistory = normalizeCategoryHistory(profile.categoryHistory);
+
+    if (category && !categoryHistory.length) {
+      categoryHistory = [createCategoryHistoryEntry(category, createdAt)];
+      athletesChanged = true;
+    }
+
     const normalizedProfile: Athlete = {
       ...profile,
       name: cleanName,
-      createdAt: profile.createdAt || new Date().toISOString(),
-      updatedAt: profile.updatedAt || profile.createdAt || new Date().toISOString(),
+      category,
+      categoryHistory,
+      createdAt,
+      updatedAt,
     };
     athletes.push(normalizedProfile);
     athleteByName.set(key, normalizedProfile);
@@ -158,13 +245,21 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
     }
 
     if (!athlete) return session;
-    if (session.athleteId === athlete.id && session.athleteName === athlete.name) return session;
+
+    const athleteCategory =
+      session.athleteCategory ?? getAthleteCategoryAtDate(athlete, session.date);
+    const identityMatches =
+      session.athleteId === athlete.id && session.athleteName === athlete.name;
+    const categoryMatches = session.athleteCategory === athleteCategory;
+
+    if (identityMatches && categoryMatches) return session;
 
     sessionsChanged = true;
     return {
       ...session,
       athleteId: athlete.id,
       athleteName: athlete.name,
+      athleteCategory,
     };
   });
 
@@ -220,10 +315,18 @@ export async function upsertAthlete(
 
   if (existingIndex >= 0) {
     const existing = athletes[existingIndex];
+    const categoryWasProvided = Object.prototype.hasOwnProperty.call(fields, 'category');
+    const category = categoryWasProvided ? normalizeCategory(fields.category) : existing.category;
+    const categoryHistory = categoryWasProvided
+      ? applyCategoryChange(existing, category, now)
+      : normalizeCategoryHistory(existing.categoryHistory);
+
     const updated: Athlete = {
       ...existing,
       ...fields,
       name: cleanName,
+      category,
+      categoryHistory,
       updatedAt: now,
     };
     const next = [...athletes];
@@ -232,10 +335,13 @@ export async function upsertAthlete(
     return updated;
   }
 
+  const category = normalizeCategory(fields.category);
   const athlete: Athlete = {
     ...createAthlete(cleanName),
     ...fields,
     name: cleanName,
+    category,
+    categoryHistory: category ? [createCategoryHistoryEntry(category, now)] : [],
     updatedAt: now,
   };
   await persistAthletes([...athletes, athlete]);
@@ -259,11 +365,20 @@ export async function updateAthlete(
   );
   if (duplicate) throw new Error('Ya existe un deportista con ese nombre');
 
+  const now = new Date().toISOString();
+  const categoryWasProvided = Object.prototype.hasOwnProperty.call(changes, 'category');
+  const category = categoryWasProvided ? normalizeCategory(changes.category) : current.category;
+  const categoryHistory = categoryWasProvided
+    ? applyCategoryChange(current, category, now)
+    : normalizeCategoryHistory(current.categoryHistory);
+
   const updated: Athlete = {
     ...current,
     ...changes,
     name: cleanName,
-    updatedAt: new Date().toISOString(),
+    category,
+    categoryHistory,
+    updatedAt: now,
   };
   const next = [...athletes];
   next[index] = updated;
@@ -309,6 +424,7 @@ export async function saveSession(session: Session): Promise<void> {
       ...session,
       athleteId: athlete.id,
       athleteName: athlete.name,
+      athleteCategory: getAthleteCategoryAtDate(athlete, session.date),
     };
   }
 
