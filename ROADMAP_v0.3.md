@@ -86,9 +86,14 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Al seleccionar un deportista guardado para un nuevo entrenamiento, precargar la configuración de su sesión más reciente.
 - [x] Precargar tipo de entrenamiento, distancia por vuelta, vueltas objetivo y tiempo objetivo, manteniendo los campos editables.
 - [x] Filtrar el historial de sesiones por deportista mediante selección rápida.
+- [x] Al seleccionar un deportista en Historial, filtrar por defecto por su categoría actual cuando exista.
+- [x] Si el deportista tuvo más de una categoría, permitir seleccionar `Todas` o una categoría histórica específica en Historial.
+- [x] Mostrar la categoría histórica directamente en cada tarjeta de sesión.
+- [x] Mostrar la categoría histórica dentro del detalle de una sesión.
 - [x] Mantener opción `Todos` para volver al historial completo.
 - [x] Eliminar de Ajustes las instrucciones técnicas para generar APK.
-- [x] Mostrar el logo real de PatinCrono en `Acerca de`.
+- [x] Mostrar el logo final de PatinCrono en `Acerca de`.
+- [x] Usar el logo final para icono, splash, icono adaptativo Android y favicon.
 - [x] Mostrar la versión de la aplicación desde la configuración Expo.
 - [x] Incorporar autoría de la aplicación en `Acerca de`.
 
@@ -116,7 +121,10 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 9. Confirmar que borrar la categoría actual sin sesiones reactiva correctamente la categoría anterior.
 10. Validar filtros por período, distancia y tipo, gráficos y comparación de sesiones.
 11. Validar precarga de la configuración del último entrenamiento al seleccionar un deportista.
-12. Validar filtro por deportista en Historial.
-13. Corregir cualquier hallazgo de prueba.
-14. Generar APK de validación v0.3.
-15. Crear `RELEASE_NOTES_v0.3.0.md`, cerrar v0.3 y abrir `develop-v0.4`.
+12. Validar en Historial que al seleccionar un deportista se aplique automáticamente su categoría actual.
+13. Validar cambio entre categorías históricas y opción `Todas` cuando el deportista tenga más de una categoría.
+14. Confirmar que la categoría se vea tanto en la tarjeta como en el detalle de cada sesión.
+15. Ejecutar Expo con caché limpia y confirmar que splash y `Acerca de` muestran el logo final.
+16. Corregir cualquier hallazgo de prueba.
+17. Generar APK de validación v0.3.
+18. Crear `RELEASE_NOTES_v0.3.0.md`, cerrar v0.3 y abrir `develop-v0.4`.
