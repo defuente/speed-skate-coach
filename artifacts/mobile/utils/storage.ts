@@ -499,6 +499,7 @@ export async function updateAthlete(
     : current.performanceLevel;
   const category = birthDate ? getCurrentAgeCategory(birthDate) : undefined;
   const categoryHistory = applyCategoryChange(current, category, now);
+  const shouldBackfillPerformanceLevel = !current.performanceLevel && !!performanceLevel;
 
   const updated: Athlete = {
     ...current,
@@ -520,12 +521,17 @@ export async function updateAthlete(
     const athleteCategory = birthDate
       ? getAgeCategoryForDate(birthDate, session.date)
       : undefined;
+    const athletePerformanceLevel =
+      shouldBackfillPerformanceLevel && !session.athletePerformanceLevel
+        ? performanceLevel
+        : session.athletePerformanceLevel;
 
     return {
       ...session,
       athleteName: cleanName,
       athleteCategory,
       athleteCategoryHistoryId: undefined,
+      athletePerformanceLevel,
     };
   });
 
