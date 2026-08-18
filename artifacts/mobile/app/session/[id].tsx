@@ -149,10 +149,20 @@ export default function SessionDetailScreen() {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[s.name, { color: colors.foreground }]}>{session.athleteName || 'Sin nombre'}</Text>
-          {session.athleteCategory && (
-            <View style={[s.categoryPill, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}40` }]}>
-              <Ionicons name="ribbon-outline" size={14} color={colors.primary} />
-              <Text style={[s.categoryText, { color: colors.primary }]}>Categoría · {session.athleteCategory}</Text>
+          {(session.athleteCategory || session.athletePerformanceLevel) && (
+            <View style={s.classificationRow}>
+              {session.athleteCategory && (
+                <View style={[s.categoryPill, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}40` }]}>
+                  <Ionicons name="ribbon-outline" size={14} color={colors.primary} />
+                  <Text style={[s.categoryText, { color: colors.primary }]}>Categoría · {session.athleteCategory}</Text>
+                </View>
+              )}
+              {session.athletePerformanceLevel && (
+                <View style={[s.categoryPill, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="bar-chart-outline" size={14} color={colors.mutedForeground} />
+                  <Text style={[s.categoryText, { color: colors.mutedForeground }]}>Nivel · {session.athletePerformanceLevel}</Text>
+                </View>
+              )}
             </View>
           )}
           <Text style={[s.sub, { color: colors.mutedForeground }]}>
@@ -363,6 +373,7 @@ const s = StyleSheet.create({
   scroll: { padding: 16, gap: 12, paddingBottom: 40 },
   card: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 5 },
   name: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  classificationRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   categoryPill: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
