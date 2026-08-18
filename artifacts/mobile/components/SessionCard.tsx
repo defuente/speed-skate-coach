@@ -60,6 +60,13 @@ export function SessionCard({ session, onPress }: Props) {
             <Text style={[styles.type, { color: colors.primary }]}>{session.trainingType}</Text>
           </View>
 
+          {session.athleteCategory && (
+            <View style={[styles.categoryPill, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}40` }]}>
+              <Ionicons name="ribbon-outline" size={12} color={colors.primary} />
+              <Text style={[styles.categoryText, { color: colors.primary }]}>{session.athleteCategory}</Text>
+            </View>
+          )}
+
           {volumeStatus && (
             <View style={[styles.statusPill, { backgroundColor: `${volumeStatus.color}18` }]}>
               <Ionicons name={volumeStatus.icon} size={13} color={volumeStatus.color} />
@@ -164,6 +171,19 @@ const styles = StyleSheet.create({
   },
   type: {
     fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  categoryText: {
+    fontSize: 10,
     fontFamily: 'Inter_600SemiBold',
   },
   statusPill: {
