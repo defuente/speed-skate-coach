@@ -13,6 +13,7 @@ export interface AthleteSessionFilter {
   rangeDays?: number;
   distancePerLap?: number;
   trainingType?: TrainingType;
+  category?: string;
 }
 
 export interface MetricPoint {
@@ -82,6 +83,7 @@ export function filterAthleteSessions(
     if (minimumDate !== null && new Date(session.date).getTime() < minimumDate) return false;
     if (filter.distancePerLap !== undefined && session.distancePerLap !== filter.distancePerLap) return false;
     if (filter.trainingType && session.trainingType !== filter.trainingType) return false;
+    if (filter.category && session.athleteCategory !== filter.category) return false;
     return true;
   });
 }
@@ -90,6 +92,16 @@ export function getAvailableDistances(sessions: Session[]): number[] {
   return Array.from(
     new Set(sessions.map(session => session.distancePerLap).filter(distance => distance > 0)),
   ).sort((a, b) => a - b);
+}
+
+export function getAvailableCategories(sessions: Session[]): string[] {
+  return Array.from(
+    new Set(
+      sessions
+        .map(session => session.athleteCategory?.trim())
+        .filter((category): category is string => !!category),
+    ),
+  ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 }
 
 export function buildMetricSeries(
@@ -136,6 +148,10 @@ export function compareSessions(currentSession: Session, previousSession: Sessio
 export function buildPerformanceInsights(currentSession: Session, previousSession?: Session): string[] {
   const insights: string[] = [];
   const current = getSessionMetricSnapshot(currentSession);
+
+  if (currentSession.athleteCategory) {
+    insights.push(`Categoría de la sesión: ${currentSession.athleteCategory}.`);
+  }
 
   if (current.volumeCompliance !== null) {
     if (current.volumeCompliance >= 100) {
@@ -207,6 +223,7 @@ export function findPreviousComparableSession(
         session.id !== currentSession.id &&
         session.distancePerLap === currentSession.distancePerLap &&
         session.trainingType === currentSession.trainingType &&
+        (!currentSession.athleteCategory || session.athleteCategory === currentSession.athleteCategory) &&
         new Date(session.date).getTime() < new Date(currentSession.date).getTime(),
     )
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
