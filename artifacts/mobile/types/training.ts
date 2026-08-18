@@ -40,6 +40,7 @@ export interface Session {
   athleteId?: string;
   athleteName: string;
   athleteCategory?: string;
+  athleteCategoryHistoryId?: string;
   trainingType: TrainingType;
   distancePerLap: number;
   targetLapTimeMs?: number;
