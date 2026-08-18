@@ -15,13 +15,23 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { Ionicons } from '@expo/vector-icons';
 import { SessionCard } from '@/components/SessionCard';
-import { Session } from '@/types/training';
-import { getSessions } from '@/utils/storage';
+import { Athlete, Session } from '@/types/training';
+import { getAthleteProfiles, getSessions } from '@/utils/storage';
 import { exportAthleteCSV } from '@/utils/csvExport';
 
 interface AthleteFilter {
   key: string;
   label: string;
+}
+
+interface CategoryFilter {
+  key: string;
+  label: string;
+  current: boolean;
+}
+
+function normalizedKey(value?: string): string {
+  return value?.trim().toLocaleLowerCase() ?? '';
 }
 
 function sessionAthleteKey(session: Session): string {
@@ -34,14 +44,17 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedAthleteKey, setSelectedAthleteKey] = useState('all');
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState('all');
 
   const load = useCallback(async () => {
-    const data = await getSessions();
-    setSessions(data);
+    const [sessionData, athleteData] = await Promise.all([getSessions(), getAthleteProfiles()]);
+    setSessions(sessionData);
+    setAthletes(athleteData);
     setLoading(false);
   }, []);
 
@@ -74,13 +87,73 @@ export default function HistoryScreen() {
     [athleteFilters],
   );
 
-  const filteredSessions = useMemo(
+  const selectedAthlete = useMemo(() => {
+    if (selectedAthleteKey === 'all') return undefined;
+    const filter = athleteFilters.find(item => item.key === selectedAthleteKey);
+    if (!filter) return undefined;
+    return athletes.find(
+      athlete =>
+        athlete.id === selectedAthleteKey ||
+        normalizedKey(athlete.name) === normalizedKey(filter.label),
+    );
+  }, [athleteFilters, athletes, selectedAthleteKey]);
+
+  const athleteScopedSessions = useMemo(
     () =>
       selectedAthleteKey === 'all'
         ? sessions
         : sessions.filter(session => sessionAthleteKey(session) === selectedAthleteKey),
     [selectedAthleteKey, sessions],
   );
+
+  const categoryFilters = useMemo<CategoryFilter[]>(() => {
+    if (selectedAthleteKey === 'all') return [];
+
+    const names = new Map<string, string>();
+    selectedAthlete?.categoryHistory?.forEach(entry => {
+      const clean = entry.category.trim();
+      if (clean) names.set(normalizedKey(clean), clean);
+    });
+    athleteScopedSessions.forEach(session => {
+      const clean = session.athleteCategory?.trim();
+      if (clean) names.set(normalizedKey(clean), clean);
+    });
+
+    const currentKey = normalizedKey(selectedAthlete?.category);
+    return [...names.entries()]
+      .map(([key, label]) => ({ key, label, current: !!currentKey && key === currentKey }))
+      .sort((a, b) => {
+        if (a.current !== b.current) return a.current ? -1 : 1;
+        return a.label.localeCompare(b.label, 'es', { sensitivity: 'base' });
+      });
+  }, [athleteScopedSessions, selectedAthlete, selectedAthleteKey]);
+
+  const filteredSessions = useMemo(
+    () =>
+      selectedCategoryKey === 'all'
+        ? athleteScopedSessions
+        : athleteScopedSessions.filter(
+            session => normalizedKey(session.athleteCategory) === selectedCategoryKey,
+          ),
+    [athleteScopedSessions, selectedCategoryKey],
+  );
+
+  const selectAthlete = useCallback(
+    (athlete: AthleteFilter) => {
+      setSelectedAthleteKey(athlete.key);
+      const profile = athletes.find(
+        item => item.id === athlete.key || normalizedKey(item.name) === normalizedKey(athlete.label),
+      );
+      const currentCategory = normalizedKey(profile?.category);
+      setSelectedCategoryKey(currentCategory || 'all');
+    },
+    [athletes],
+  );
+
+  const clearAthleteFilter = useCallback(() => {
+    setSelectedAthleteKey('all');
+    setSelectedCategoryKey('all');
+  }, []);
 
   const exportAthlete = useCallback(
     (athlete: string) => {
@@ -106,7 +179,7 @@ export default function HistoryScreen() {
 
   const webTop = Platform.OS === 'web' ? 67 : 0;
   const webBottom = Platform.OS === 'web' ? 84 : 0;
-  const filtered = selectedAthleteKey !== 'all';
+  const filtered = selectedAthleteKey !== 'all' || selectedCategoryKey !== 'all';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -150,20 +223,51 @@ export default function HistoryScreen() {
           >
             <FilterChip
               label="Todos"
+              icon="people-outline"
               selected={selectedAthleteKey === 'all'}
-              onPress={() => setSelectedAthleteKey('all')}
+              onPress={clearAthleteFilter}
               colors={colors}
             />
             {athleteFilters.map(athlete => (
               <FilterChip
                 key={athlete.key}
                 label={athlete.label}
+                icon="person-outline"
                 selected={selectedAthleteKey === athlete.key}
-                onPress={() => setSelectedAthleteKey(athlete.key)}
+                onPress={() => selectAthlete(athlete)}
                 colors={colors}
               />
             ))}
           </ScrollView>
+
+          {selectedAthleteKey !== 'all' && categoryFilters.length > 1 && (
+            <>
+              <Text style={[styles.filterLabel, styles.categoryLabel, { color: colors.mutedForeground }]}>CATEGORÍA</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterScroll}
+              >
+                <FilterChip
+                  label="Todas"
+                  icon="layers-outline"
+                  selected={selectedCategoryKey === 'all'}
+                  onPress={() => setSelectedCategoryKey('all')}
+                  colors={colors}
+                />
+                {categoryFilters.map(category => (
+                  <FilterChip
+                    key={category.key}
+                    label={category.current ? `${category.label} · Actual` : category.label}
+                    icon={category.current ? 'ribbon' : 'ribbon-outline'}
+                    selected={selectedCategoryKey === category.key}
+                    onPress={() => setSelectedCategoryKey(category.key)}
+                    colors={colors}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          )}
         </View>
       )}
 
@@ -175,14 +279,15 @@ export default function HistoryScreen() {
         <View style={styles.empty}>
           <Ionicons name="time-outline" size={56} color={colors.mutedForeground} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Sin sesiones aún</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            Completa tu primer entrenamiento para verlo aquí
-          </Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Completa tu primer entrenamiento para verlo aquí</Text>
         </View>
       ) : filteredSessions.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="filter-outline" size={50} color={colors.mutedForeground} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Sin sesiones para este filtro</Text>
+          {selectedCategoryKey !== 'all' && (
+            <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Puedes seleccionar otra categoría o ver todas.</Text>
+          )}
         </View>
       ) : (
         <FlatList
@@ -203,11 +308,13 @@ export default function HistoryScreen() {
 
 function FilterChip({
   label,
+  icon,
   selected,
   onPress,
   colors,
 }: {
   label: string;
+  icon: keyof typeof Ionicons.glyphMap;
   selected: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useColors>;
@@ -225,7 +332,7 @@ function FilterChip({
       ]}
     >
       <Ionicons
-        name={selected ? 'person' : 'person-outline'}
+        name={selected && icon === 'person-outline' ? 'person' : icon}
         size={14}
         color={selected ? colors.primaryForeground : colors.foreground}
       />
@@ -272,6 +379,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 7,
   },
+  categoryLabel: { marginTop: 10 },
   filterScroll: { paddingHorizontal: 16, gap: 8, paddingRight: 24 },
   filterChip: {
     flexDirection: 'row',
