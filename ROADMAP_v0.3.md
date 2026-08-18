@@ -15,39 +15,46 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Mantener `athleteName` en la sesión como snapshot/compatibilidad.
 - [x] Seleccionar deportistas por ID al iniciar entrenamientos nuevos.
 - [x] Permitir renombrar un deportista sin perder la relación con sus sesiones.
+- [x] Incorporar historial de categorías con períodos de vigencia.
+- [x] Guardar en cada sesión la categoría vigente del deportista como snapshot histórico.
 
 ## 2. Ficha del deportista
 
 - [x] Nombre.
-- [x] Fecha de nacimiento opcional.
-- [x] Categoría opcional.
+- [x] Fecha de nacimiento opcional en formato visible `dd/MM/yyyy`.
+- [x] Categoría actual opcional.
 - [x] Club/equipo opcional.
 - [x] Observaciones del entrenador.
 - [x] Resumen de sesiones, vueltas, tiempo y distancia.
 - [x] Cumplimiento medio de volumen.
 - [x] Cumplimiento medio de ritmo.
 - [x] Consistencia media basada solo en sesiones con más de una vuelta.
+- [x] Línea de tiempo visual del historial de categorías.
+- [x] Mostrar fecha desde/hasta de cada categoría y cantidad de sesiones asociadas.
 
 ## 3. Récords personales
 
 - [x] Récord personal separado por distancia de vuelta.
 - [x] No mezclar tiempos de pistas/distancias distintas.
-- [ ] Evaluar después de pruebas si los récords necesitan además filtro por tipo de entrenamiento.
+- [x] Mantener el récord principal por distancia; el tipo de entrenamiento se usa como contexto analítico, no para fragmentar el récord personal en v0.3.
 
 ## 4. Analítica avanzada
 
 - [x] Centralizar cálculos de analítica en `utils/athleteAnalytics.ts`.
 - [x] Métricas: mejor vuelta, promedio, consistencia, velocidad media, ritmo y volumen.
 - [x] Filtro por período: 30 / 90 días / todo.
+- [x] Filtro por categoría histórica.
 - [x] Filtro por distancia de vuelta.
 - [x] Filtro por tipo de entrenamiento.
 - [x] Gráfico seleccionable por métrica.
 - [x] Evitar comparaciones inválidas entre distancias diferentes.
+- [x] Evitar comparar automáticamente sesiones de categorías diferentes cuando existe categoría histórica.
 
 ## 5. Comparación de sesiones
 
 - [x] Localizar la sesión anterior comparable.
 - [x] Exigir misma distancia y mismo tipo de entrenamiento para la comparación automática.
+- [x] Exigir además la misma categoría cuando la sesión actual tiene categoría registrada.
 - [x] Calcular diferencias entre métricas.
 - [x] Generar conclusiones automáticas basadas en reglas.
 - [x] Interfaz visual de comparación en la ficha del deportista.
@@ -59,6 +66,7 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] CSV individual por sesión.
 - [x] CSV consolidado por deportista.
 - [x] Incorporar `athleteId` al CSV sin eliminar el nombre legible del deportista.
+- [x] Incorporar categoría histórica de la sesión al CSV.
 
 ## 7. Preparación para v0.4
 
@@ -67,6 +75,9 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Revisar IDs de entidades: `Athlete.id` y `Session.id` permanentes; vueltas identificadas por `(sessionId, number)`.
 - [x] Definir documento de contrato de datos local/nube en `DATA_CONTRACT_v0.4.md`.
 - [x] Documentar estrategia offline-first y manejo inicial de conflictos para v0.4.
+- [x] Preparar el modelo local de categorías para sincronización futura.
+
+> La autenticación, Google Sign-In, respaldo remoto, restauración en otro teléfono y sincronización real pertenecen a **v0.4**. El backend inicial de Supabase ya está preparado, pero la app v0.3 continúa siendo offline-first y no depende de la nube.
 
 ## 8. Mejoras de flujo y presentación
 
@@ -82,13 +93,14 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 ## Pendientes para cerrar v0.3
 
 1. Ejecutar `pnpm typecheck` en el entorno local.
-2. Probar migración con datos reales existentes del usuario.
+2. Probar la migración con los datos reales existentes del teléfono.
 3. Validar edición/renombre de un deportista y conservación de sus sesiones.
-4. Validar filtros, gráficos y comparación con al menos dos sesiones comparables.
-5. Validar precarga de la configuración del último entrenamiento al seleccionar un deportista.
-6. Validar filtro por deportista en Historial.
-7. Decidir después de la prueba si el récord personal requiere filtro adicional por tipo de entrenamiento.
-8. Corregir cualquier hallazgo de prueba.
-9. Generar APK de validación v0.3.
-10. Crear release notes y cerrar v0.3.
-11. Abrir `develop-v0.4` para nube + portal web.
+4. Cambiar la categoría de un deportista y confirmar que aparece el período anterior y el nuevo período actual.
+5. Crear una sesión después del cambio y confirmar que guarda la nueva categoría.
+6. Validar el filtro de analítica por categoría con sesiones de al menos dos etapas distintas cuando existan datos suficientes.
+7. Validar filtros por período, distancia y tipo, gráficos y comparación de sesiones.
+8. Validar precarga de la configuración del último entrenamiento al seleccionar un deportista.
+9. Validar filtro por deportista en Historial.
+10. Corregir cualquier hallazgo de prueba.
+11. Generar APK de validación v0.3.
+12. Crear `RELEASE_NOTES_v0.3.0.md`, cerrar v0.3 y abrir `develop-v0.4`.
