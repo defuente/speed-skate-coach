@@ -1,12 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Athlete, AthleteCategoryHistoryEntry, AppSettings, Session } from '@/types/training';
+import {
+  Athlete,
+  AthleteCategoryHistoryEntry,
+  AppSettings,
+  PerformanceLevel,
+  Session,
+} from '@/types/training';
+import {
+  getAgeCategoryForDate,
+  getCurrentAgeCategory,
+  isPerformanceLevel,
+} from '@/utils/skatingCategories';
 
 const SESSIONS_KEY = '@patincrono/sessions';
 const STORAGE_KEY = '@patincrono/storage';
 const LEGACY_ATHLETES_KEY = '@patincrono/athletes';
 const ATHLETES_V2_KEY = '@patincrono/athletes_v2';
 const SCHEMA_VERSION_KEY = '@patincrono/schema_version';
-const ATHLETE_SCHEMA_VERSION = '4';
+const ATHLETE_SCHEMA_VERSION = '5';
 
 interface StorageData {
   appSettings: AppSettings;
@@ -29,6 +40,11 @@ export function normalizeAthleteName(name: string): string {
 function normalizeCategory(category?: string): string | undefined {
   const clean = category?.trim();
   return clean || undefined;
+}
+
+function normalizePerformanceLevel(level?: string): PerformanceLevel | undefined {
+  const clean = level?.trim();
+  return clean && isPerformanceLevel(clean) ? clean : undefined;
 }
 
 function categoryKey(category?: string): string {
@@ -90,6 +106,9 @@ export function getAthleteCategoryAtDate(
   athlete: Athlete,
   date: string,
 ): string | undefined {
+  const automatic = getAgeCategoryForDate(athlete.birthDate, date);
+  if (automatic) return automatic;
+  if (athlete.birthDate) return undefined;
   return getAthleteCategoryEntryAtDate(athlete, date)?.category;
 }
 
@@ -276,19 +295,31 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
 
     const createdAt = profile.createdAt || new Date().toISOString();
     const updatedAt = profile.updatedAt || createdAt;
-    const category = normalizeCategory(profile.category);
+    const birthDate = profile.birthDate?.trim() || undefined;
+    const automaticCategory = birthDate ? getCurrentAgeCategory(birthDate) : undefined;
+    const category = birthDate ? automaticCategory : undefined;
+    const performanceLevel = normalizePerformanceLevel(profile.performanceLevel);
     let categoryHistory = normalizeCategoryHistory(profile.categoryHistory);
 
-    if (category && !categoryHistory.length) {
-      categoryHistory = [createCategoryHistoryEntry(category, createdAt)];
+    if (category && categoryKey(profile.category) !== categoryKey(category)) {
+      categoryHistory = applyCategoryChange(
+        { ...profile, category: normalizeCategory(profile.category), categoryHistory },
+        category,
+        new Date().toISOString(),
+      );
       athletesChanged = true;
     }
+
+    if (!birthDate && profile.category) athletesChanged = true;
+    if (performanceLevel !== profile.performanceLevel) athletesChanged = true;
 
     const normalizedProfile: Athlete = {
       ...profile,
       name: cleanName,
+      birthDate,
       category,
       categoryHistory,
+      performanceLevel,
       createdAt,
       updatedAt,
     };
@@ -320,9 +351,17 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
 
     if (!athlete) return session;
 
-    const categoryEntry = resolveSessionCategoryEntry(athlete, session);
-    const athleteCategory = session.athleteCategory ?? categoryEntry?.category;
-    const athleteCategoryHistoryId = session.athleteCategoryHistoryId ?? categoryEntry?.id;
+    const automaticCategory = getAgeCategoryForDate(athlete.birthDate, session.date);
+    const legacyCategoryEntry = athlete.birthDate
+      ? undefined
+      : resolveSessionCategoryEntry(athlete, session);
+    const athleteCategory = athlete.birthDate
+      ? automaticCategory
+      : session.athleteCategory ?? legacyCategoryEntry?.category;
+    const athleteCategoryHistoryId = athlete.birthDate
+      ? undefined
+      : session.athleteCategoryHistoryId ?? legacyCategoryEntry?.id;
+
     const identityMatches =
       session.athleteId === athlete.id && session.athleteName === athlete.name;
     const categoryMatches = session.athleteCategory === athleteCategory;
@@ -380,7 +419,7 @@ export async function getAthletes(): Promise<string[]> {
 
 export async function upsertAthlete(
   name: string,
-  fields: Partial<Pick<Athlete, 'birthDate' | 'category' | 'club' | 'notes'>> = {},
+  fields: Partial<Pick<Athlete, 'birthDate' | 'category' | 'performanceLevel' | 'club' | 'notes'>> = {},
 ): Promise<Athlete> {
   const cleanName = name.trim();
   if (!cleanName) throw new Error('Nombre inválido');
@@ -392,18 +431,23 @@ export async function upsertAthlete(
 
   if (existingIndex >= 0) {
     const existing = athletes[existingIndex];
-    const categoryWasProvided = Object.prototype.hasOwnProperty.call(fields, 'category');
-    const category = categoryWasProvided ? normalizeCategory(fields.category) : existing.category;
-    const categoryHistory = categoryWasProvided
-      ? applyCategoryChange(existing, category, now)
-      : normalizeCategoryHistory(existing.categoryHistory);
+    const birthDateWasProvided = Object.prototype.hasOwnProperty.call(fields, 'birthDate');
+    const birthDate = birthDateWasProvided ? fields.birthDate?.trim() || undefined : existing.birthDate;
+    const levelWasProvided = Object.prototype.hasOwnProperty.call(fields, 'performanceLevel');
+    const performanceLevel = levelWasProvided
+      ? normalizePerformanceLevel(fields.performanceLevel)
+      : existing.performanceLevel;
+    const category = birthDate ? getCurrentAgeCategory(birthDate) : undefined;
+    const categoryHistory = applyCategoryChange(existing, category, now);
 
     const updated: Athlete = {
       ...existing,
       ...fields,
       name: cleanName,
+      birthDate,
       category,
       categoryHistory,
+      performanceLevel,
       updatedAt: now,
     };
     const next = [...athletes];
@@ -412,13 +456,17 @@ export async function upsertAthlete(
     return updated;
   }
 
-  const category = normalizeCategory(fields.category);
+  const birthDate = fields.birthDate?.trim() || undefined;
+  const category = birthDate ? getCurrentAgeCategory(birthDate) : undefined;
+  const performanceLevel = normalizePerformanceLevel(fields.performanceLevel);
   const athlete: Athlete = {
     ...createAthlete(cleanName),
     ...fields,
     name: cleanName,
+    birthDate,
     category,
     categoryHistory: category ? [createCategoryHistoryEntry(category, now)] : [],
+    performanceLevel,
     updatedAt: now,
   };
   await persistAthletes([...athletes, athlete]);
@@ -427,7 +475,7 @@ export async function upsertAthlete(
 
 export async function updateAthlete(
   id: string,
-  changes: Partial<Pick<Athlete, 'name' | 'birthDate' | 'category' | 'club' | 'notes'>>,
+  changes: Partial<Pick<Athlete, 'name' | 'birthDate' | 'category' | 'performanceLevel' | 'club' | 'notes'>>,
 ): Promise<Athlete> {
   const athletes = await getAthleteProfiles();
   const index = athletes.findIndex(athlete => athlete.id === id);
@@ -443,29 +491,43 @@ export async function updateAthlete(
   if (duplicate) throw new Error('Ya existe un deportista con ese nombre');
 
   const now = new Date().toISOString();
-  const categoryWasProvided = Object.prototype.hasOwnProperty.call(changes, 'category');
-  const category = categoryWasProvided ? normalizeCategory(changes.category) : current.category;
-  const categoryHistory = categoryWasProvided
-    ? applyCategoryChange(current, category, now)
-    : normalizeCategoryHistory(current.categoryHistory);
+  const birthDateWasProvided = Object.prototype.hasOwnProperty.call(changes, 'birthDate');
+  const birthDate = birthDateWasProvided ? changes.birthDate?.trim() || undefined : current.birthDate;
+  const levelWasProvided = Object.prototype.hasOwnProperty.call(changes, 'performanceLevel');
+  const performanceLevel = levelWasProvided
+    ? normalizePerformanceLevel(changes.performanceLevel)
+    : current.performanceLevel;
+  const category = birthDate ? getCurrentAgeCategory(birthDate) : undefined;
+  const categoryHistory = applyCategoryChange(current, category, now);
 
   const updated: Athlete = {
     ...current,
     ...changes,
     name: cleanName,
+    birthDate,
     category,
     categoryHistory,
+    performanceLevel,
     updatedAt: now,
   };
   const next = [...athletes];
   next[index] = updated;
 
   const sessions = await getSessions();
-  const updatedSessions = sessions.map(session =>
-    session.athleteId === id
-      ? { ...session, athleteName: cleanName }
-      : session,
-  );
+  const updatedSessions = sessions.map(session => {
+    if (session.athleteId !== id) return session;
+
+    const athleteCategory = birthDate
+      ? getAgeCategoryForDate(birthDate, session.date)
+      : undefined;
+
+    return {
+      ...session,
+      athleteName: cleanName,
+      athleteCategory,
+      athleteCategoryHistoryId: undefined,
+    };
+  });
 
   await Promise.all([
     persistAthletes(next),
@@ -497,13 +559,14 @@ export async function saveSession(session: Session): Promise<void> {
     }
     if (!athlete) athlete = await upsertAthlete(session.athleteName);
 
-    const categoryEntry = getAthleteCategoryEntryAtDate(athlete, session.date);
+    const athleteCategory = getAgeCategoryForDate(athlete.birthDate, session.date);
     normalizedSession = {
       ...session,
       athleteId: athlete.id,
       athleteName: athlete.name,
-      athleteCategory: categoryEntry?.category,
-      athleteCategoryHistoryId: categoryEntry?.id,
+      athleteCategory,
+      athleteCategoryHistoryId: undefined,
+      athletePerformanceLevel: athlete.performanceLevel,
     };
   }
 
@@ -629,7 +692,7 @@ export async function deleteAthleteCategoryHistoryEntry(
   const activeEntry = [...repairedHistory].reverse().find(entry => !entry.validTo);
   const updatedAthlete: Athlete = {
     ...current,
-    category: activeEntry?.category,
+    category: current.birthDate ? getCurrentAgeCategory(current.birthDate) : activeEntry?.category,
     categoryHistory: repairedHistory,
     updatedAt: new Date().toISOString(),
   };
