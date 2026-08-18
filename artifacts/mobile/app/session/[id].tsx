@@ -149,6 +149,12 @@ export default function SessionDetailScreen() {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[s.name, { color: colors.foreground }]}>{session.athleteName || 'Sin nombre'}</Text>
+          {session.athleteCategory && (
+            <View style={[s.categoryPill, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}40` }]}>
+              <Ionicons name="ribbon-outline" size={14} color={colors.primary} />
+              <Text style={[s.categoryText, { color: colors.primary }]}>Categoría · {session.athleteCategory}</Text>
+            </View>
+          )}
           <Text style={[s.sub, { color: colors.mutedForeground }]}>
             {session.targetLapCount ? `${session.laps.length}/${session.targetLapCount} vueltas` : `${session.laps.length} vueltas`}
             {session.distancePerLap > 0
@@ -357,6 +363,18 @@ const s = StyleSheet.create({
   scroll: { padding: 16, gap: 12, paddingBottom: 40 },
   card: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 5 },
   name: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  categoryPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginVertical: 2,
+  },
+  categoryText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   sub: { fontSize: 13 },
   volumeBox: { marginTop: 8, borderWidth: 1, borderRadius: 10, padding: 10, gap: 2 },
   volumeTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
