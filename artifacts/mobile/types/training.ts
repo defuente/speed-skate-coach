@@ -7,6 +7,22 @@ export type TrainingType =
 
 export const TRAINING_TYPES: TrainingType[] = ['Resistencia', 'Velocidad', 'Intervalos', 'Técnica', 'Libre'];
 
+export type AgeCategory =
+  | '6ª Categoría'
+  | '5ª Categoría'
+  | '4ª Categoría'
+  | '3ª Categoría'
+  | 'Pre-Juvenil'
+  | 'Juvenil'
+  | 'Adulto'
+  | 'Senior'
+  | 'Máster';
+
+export type PerformanceLevel =
+  | 'Formativo / Escuela'
+  | 'Intermedia'
+  | 'Alta Competencia / Federado';
+
 export interface AthleteCategoryHistoryEntry {
   id: string;
   category: string;
@@ -18,8 +34,14 @@ export interface Athlete {
   id: string;
   name: string;
   birthDate?: string;
+  /**
+   * Categoría etaria actual. Desde v0.3 se calcula automáticamente
+   * a partir de birthDate usando la edad al 31 de diciembre.
+   * Se mantiene como campo para compatibilidad con datos históricos.
+   */
   category?: string;
   categoryHistory?: AthleteCategoryHistoryEntry[];
+  performanceLevel?: PerformanceLevel;
   club?: string;
   notes?: string;
   createdAt: string;
@@ -39,8 +61,11 @@ export interface Session {
   date: string;
   athleteId?: string;
   athleteName: string;
+  /** Snapshot de la categoría etaria correspondiente al año de la sesión. */
   athleteCategory?: string;
   athleteCategoryHistoryId?: string;
+  /** Snapshot del nivel de rendimiento vigente al guardar la sesión. */
+  athletePerformanceLevel?: PerformanceLevel;
   trainingType: TrainingType;
   distancePerLap: number;
   targetLapTimeMs?: number;
