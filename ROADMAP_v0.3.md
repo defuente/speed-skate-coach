@@ -17,6 +17,8 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Permitir renombrar un deportista sin perder la relación con sus sesiones.
 - [x] Incorporar historial de categorías con períodos de vigencia.
 - [x] Guardar en cada sesión la categoría vigente del deportista como snapshot histórico.
+- [x] Vincular cada sesión al ID de la etapa histórica (`athleteCategoryHistoryId`) cuando corresponde.
+- [x] Migrar automáticamente sesiones existentes al ID de etapa histórica cuando puede inferirse de forma segura.
 
 ## 2. Ficha del deportista
 
@@ -90,6 +92,17 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 - [x] Mostrar la versión de la aplicación desde la configuración Expo.
 - [x] Incorporar autoría de la aplicación en `Acerca de`.
 
+## 9. Corrección del historial de categorías
+
+- [x] Impedir eliminar silenciosamente una categoría que todavía tenga sesiones asociadas.
+- [x] Permitir reasignar una sesión individual a otra etapa histórica del mismo deportista.
+- [x] Permitir mover todas las sesiones de una categoría a otra etapa histórica.
+- [x] Permitir mover las sesiones y eliminar una categoría cargada por error.
+- [x] Permitir eliminar directamente categorías sin sesiones.
+- [x] Si se elimina la categoría actual, reabrir automáticamente la etapa anterior como categoría vigente.
+- [x] Mantener intactos los tiempos, vueltas y demás métricas de una sesión al cambiar solo su categoría.
+- [x] Incorporar acceso `Corregir categorías` desde la sección Deportistas.
+
 ## Pendientes para cerrar v0.3
 
 1. Ejecutar `pnpm typecheck` en el entorno local.
@@ -98,9 +111,12 @@ La v0.3 se considerará cerrada cuando los deportistas tengan identidad estable 
 4. Cambiar la categoría de un deportista y confirmar que aparece el período anterior y el nuevo período actual.
 5. Crear una sesión después del cambio y confirmar que guarda la nueva categoría.
 6. Validar el filtro de analítica por categoría con sesiones de al menos dos etapas distintas cuando existan datos suficientes.
-7. Validar filtros por período, distancia y tipo, gráficos y comparación de sesiones.
-8. Validar precarga de la configuración del último entrenamiento al seleccionar un deportista.
-9. Validar filtro por deportista en Historial.
-10. Corregir cualquier hallazgo de prueba.
-11. Generar APK de validación v0.3.
-12. Crear `RELEASE_NOTES_v0.3.0.md`, cerrar v0.3 y abrir `develop-v0.4`.
+7. Validar `Deportistas → Corregir categorías`: mover una sesión individual, mover todas y eliminar una etapa incorrecta.
+8. Confirmar que eliminar una categoría con sesiones y sin destino queda bloqueado.
+9. Confirmar que borrar la categoría actual sin sesiones reactiva correctamente la categoría anterior.
+10. Validar filtros por período, distancia y tipo, gráficos y comparación de sesiones.
+11. Validar precarga de la configuración del último entrenamiento al seleccionar un deportista.
+12. Validar filtro por deportista en Historial.
+13. Corregir cualquier hallazgo de prueba.
+14. Generar APK de validación v0.3.
+15. Crear `RELEASE_NOTES_v0.3.0.md`, cerrar v0.3 y abrir `develop-v0.4`.
