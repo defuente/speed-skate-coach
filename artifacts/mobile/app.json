@@ -4,12 +4,12 @@
     "slug": "mobile",
     "version": "0.3.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon_2.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon_2.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0D1117"
     },
@@ -20,12 +20,12 @@
     "android": {
       "package": "com.patincrono.mobile",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon_2.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0D1117"
       }
     },
     "web": {
-      "favicon": "./assets/images/icon_2.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       [
