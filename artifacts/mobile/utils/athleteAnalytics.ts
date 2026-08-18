@@ -1,4 +1,4 @@
-import { Session, TrainingType } from '@/types/training';
+import { PerformanceLevel, Session, TrainingType } from '@/types/training';
 import { calculateStats } from '@/utils/calculations';
 
 export type AthleteMetric =
@@ -14,6 +14,7 @@ export interface AthleteSessionFilter {
   distancePerLap?: number;
   trainingType?: TrainingType;
   category?: string;
+  performanceLevel?: PerformanceLevel;
 }
 
 export interface MetricPoint {
@@ -84,6 +85,7 @@ export function filterAthleteSessions(
     if (filter.distancePerLap !== undefined && session.distancePerLap !== filter.distancePerLap) return false;
     if (filter.trainingType && session.trainingType !== filter.trainingType) return false;
     if (filter.category && session.athleteCategory !== filter.category) return false;
+    if (filter.performanceLevel && session.athletePerformanceLevel !== filter.performanceLevel) return false;
     return true;
   });
 }
@@ -102,6 +104,16 @@ export function getAvailableCategories(sessions: Session[]): string[] {
         .filter((category): category is string => !!category),
     ),
   ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+}
+
+export function getAvailablePerformanceLevels(sessions: Session[]): PerformanceLevel[] {
+  return Array.from(
+    new Set(
+      sessions
+        .map(session => session.athletePerformanceLevel)
+        .filter((level): level is PerformanceLevel => !!level),
+    ),
+  );
 }
 
 export function buildMetricSeries(
@@ -150,7 +162,10 @@ export function buildPerformanceInsights(currentSession: Session, previousSessio
   const current = getSessionMetricSnapshot(currentSession);
 
   if (currentSession.athleteCategory) {
-    insights.push(`Categoría de la sesión: ${currentSession.athleteCategory}.`);
+    insights.push(`Categoría etaria de la sesión: ${currentSession.athleteCategory}.`);
+  }
+  if (currentSession.athletePerformanceLevel) {
+    insights.push(`Nivel de rendimiento: ${currentSession.athletePerformanceLevel}.`);
   }
 
   if (current.volumeCompliance !== null) {
@@ -224,6 +239,8 @@ export function findPreviousComparableSession(
         session.distancePerLap === currentSession.distancePerLap &&
         session.trainingType === currentSession.trainingType &&
         (!currentSession.athleteCategory || session.athleteCategory === currentSession.athleteCategory) &&
+        (!currentSession.athletePerformanceLevel ||
+          session.athletePerformanceLevel === currentSession.athletePerformanceLevel) &&
         new Date(session.date).getTime() < new Date(currentSession.date).getTime(),
     )
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
