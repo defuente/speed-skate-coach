@@ -7,11 +7,19 @@ export type TrainingType =
 
 export const TRAINING_TYPES: TrainingType[] = ['Resistencia', 'Velocidad', 'Intervalos', 'Técnica', 'Libre'];
 
+export interface AthleteCategoryHistoryEntry {
+  id: string;
+  category: string;
+  validFrom: string;
+  validTo?: string;
+}
+
 export interface Athlete {
   id: string;
   name: string;
   birthDate?: string;
   category?: string;
+  categoryHistory?: AthleteCategoryHistoryEntry[];
   club?: string;
   notes?: string;
   createdAt: string;
@@ -31,6 +39,7 @@ export interface Session {
   date: string;
   athleteId?: string;
   athleteName: string;
+  athleteCategory?: string;
   trainingType: TrainingType;
   distancePerLap: number;
   targetLapTimeMs?: number;
