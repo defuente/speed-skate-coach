@@ -16,7 +16,7 @@ import type { Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { Athlete, Session, TRAINING_TYPES, TrainingType } from '@/types/training';
+import { Athlete, PerformanceLevel, Session, TRAINING_TYPES, TrainingType } from '@/types/training';
 import {
   deleteAthlete,
   getAthleteProfiles,
@@ -34,6 +34,7 @@ import {
   findPreviousComparableSession,
   getAvailableCategories,
   getAvailableDistances,
+  getAvailablePerformanceLevels,
 } from '@/utils/athleteAnalytics';
 import { SessionCard } from '@/components/SessionCard';
 
@@ -118,6 +119,7 @@ export default function AthleteDetailScreen() {
 
   const [rangeDays, setRangeDays] = useState<number | undefined>();
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
+  const [performanceLevelFilter, setPerformanceLevelFilter] = useState<PerformanceLevel | undefined>();
   const [distanceFilter, setDistanceFilter] = useState<number | undefined>();
   const [trainingTypeFilter, setTrainingTypeFilter] = useState<TrainingType | undefined>();
   const [metric, setMetric] = useState<AthleteMetric>('bestLap');
@@ -226,6 +228,10 @@ export default function AthleteDetailScreen() {
   );
 
   const availableCategories = useMemo(() => getAvailableCategories(sessions), [sessions]);
+  const availablePerformanceLevels = useMemo(
+    () => getAvailablePerformanceLevels(sessions),
+    [sessions],
+  );
   const availableDistances = useMemo(() => getAvailableDistances(sessions), [sessions]);
   const availableTypes = useMemo(
     () => TRAINING_TYPES.filter(type => sessions.some(session => session.trainingType === type)),
@@ -237,10 +243,18 @@ export default function AthleteDetailScreen() {
       filterAthleteSessions(sessions, {
         rangeDays,
         category: categoryFilter,
+        performanceLevel: performanceLevelFilter,
         distancePerLap: distanceFilter,
         trainingType: trainingTypeFilter,
       }),
-    [sessions, rangeDays, categoryFilter, distanceFilter, trainingTypeFilter],
+    [
+      sessions,
+      rangeDays,
+      categoryFilter,
+      performanceLevelFilter,
+      distanceFilter,
+      trainingTypeFilter,
+    ],
   );
 
   const metricDefinition = METRICS.find(item => item.key === metric) ?? METRICS[0];
@@ -311,6 +325,7 @@ export default function AthleteDetailScreen() {
       setAthlete(updated);
       setSessions(await getAthleteSessions(updated.id));
       setCategoryFilter(undefined);
+      setPerformanceLevelFilter(undefined);
       setEditVisible(false);
     } catch (error) {
       Alert.alert(
@@ -632,6 +647,29 @@ export default function AthleteDetailScreen() {
               </>
             )}
 
+            {availablePerformanceLevels.length > 0 && (
+              <>
+                <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>NIVEL DE RENDIMIENTO</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                  <FilterChip
+                    label="Todos"
+                    selected={performanceLevelFilter === undefined}
+                    onPress={() => setPerformanceLevelFilter(undefined)}
+                    colors={colors}
+                  />
+                  {availablePerformanceLevels.map(level => (
+                    <FilterChip
+                      key={level}
+                      label={level}
+                      selected={performanceLevelFilter === level}
+                      onPress={() => setPerformanceLevelFilter(level)}
+                      colors={colors}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
             {availableDistances.length > 1 && (
               <>
                 <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>DISTANCIA</Text>
@@ -696,7 +734,7 @@ export default function AthleteDetailScreen() {
               />
             ) : (
               <View style={[styles.noChart, { borderColor: colors.border }]}>
-                <Text style={[styles.noChartText, { color: colors.mutedForeground }]}>
+                <Text style={[styles.noChartText, { color: colors.mutedForeground }]}> 
                   Necesitas al menos 2 sesiones con esta métrica y estos filtros.
                 </Text>
               </View>
@@ -709,16 +747,16 @@ export default function AthleteDetailScreen() {
             style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Lectura de la última sesión</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}> 
               Comparación con la anterior de igual categoría etaria, nivel, distancia y tipo cuando existe.
             </Text>
-            <View style={[styles.compareContext, { backgroundColor: colors.background }]}>
-              <Text style={[styles.compareContextTitle, { color: colors.foreground }]}>
+            <View style={[styles.compareContext, { backgroundColor: colors.background }]}> 
+              <Text style={[styles.compareContextTitle, { color: colors.foreground }]}> 
                 {latestSession.trainingType} · {latestSession.distancePerLap} m/v
                 {latestSession.athleteCategory ? ` · ${latestSession.athleteCategory}` : ''}
                 {latestSession.athletePerformanceLevel ? ` · ${latestSession.athletePerformanceLevel}` : ''}
               </Text>
-              <Text style={[styles.compareContextDate, { color: colors.mutedForeground }]}>
+              <Text style={[styles.compareContextDate, { color: colors.mutedForeground }]}> 
                 {formatDateShort(latestSession.date)}
                 {previousComparable
                   ? ` vs ${formatDateShort(previousComparable.date)}`
@@ -756,7 +794,7 @@ export default function AthleteDetailScreen() {
         </View>
 
         {sessions.length === 0 ? (
-          <View style={[styles.none, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.none, { backgroundColor: colors.card, borderColor: colors.border }]}> 
             <Text style={{ color: colors.mutedForeground }}>Sin entrenamientos registrados.</Text>
           </View>
         ) : (
@@ -772,7 +810,7 @@ export default function AthleteDetailScreen() {
 
       <Modal visible={editVisible} transparent animationType="fade" onRequestClose={() => setEditVisible(false)}>
         <View style={styles.backdrop}>
-          <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}> 
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[styles.modalTitle, { color: colors.foreground }]}>Editar deportista</Text>
@@ -811,10 +849,10 @@ export default function AthleteDetailScreen() {
             </ScrollView>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setEditVisible(false)} style={[styles.modalBtn, { backgroundColor: colors.secondary }]}>
+              <TouchableOpacity onPress={() => setEditVisible(false)} style={[styles.modalBtn, { backgroundColor: colors.secondary }]}> 
                 <Text style={{ color: colors.foreground }}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity disabled={saving} onPress={saveProfile} style={[styles.modalBtn, { backgroundColor: colors.primary }]}>
+              <TouchableOpacity disabled={saving} onPress={saveProfile} style={[styles.modalBtn, { backgroundColor: colors.primary }]}> 
                 <Text style={{ color: colors.primaryForeground }}>{saving ? 'Guardando…' : 'Guardar'}</Text>
               </TouchableOpacity>
             </View>
@@ -889,10 +927,10 @@ function MetricChart({
           const best = lowerIsBetter ? value === min : value === max;
           return (
             <View key={`${labels[index]}-${index}`} style={styles.barCol}>
-              <Text style={[styles.barVal, { color: best ? colors.lapBest : colors.foreground }]}>
+              <Text style={[styles.barVal, { color: best ? colors.lapBest : colors.foreground }]}> 
                 {formatMetricValue(metric, value)}
               </Text>
-              <View style={[styles.track, { height }]}>
+              <View style={[styles.track, { height }]}> 
                 <View
                   style={[
                     styles.bar,
@@ -934,15 +972,15 @@ function ComparisonRow({
   const accent =
     improved === null ? colors.mutedForeground : improved ? colors.lapBest : colors.lapWorst;
   return (
-    <View style={[styles.comparisonRow, { borderTopColor: colors.border }]}>
+    <View style={[styles.comparisonRow, { borderTopColor: colors.border }]}> 
       <View style={styles.comparisonLabelWrap}>
         <Text style={[styles.comparisonLabel, { color: colors.foreground }]}>{label}</Text>
-        <Text style={[styles.comparisonPrevious, { color: colors.mutedForeground }]}>
+        <Text style={[styles.comparisonPrevious, { color: colors.mutedForeground }]}> 
           Anterior {formatComparisonValue(kind, previous)}
         </Text>
       </View>
       <View style={styles.comparisonCurrentWrap}>
-        <Text style={[styles.comparisonCurrent, { color: colors.foreground }]}>
+        <Text style={[styles.comparisonCurrent, { color: colors.foreground }]}> 
           {formatComparisonValue(kind, current)}
         </Text>
         <Text style={[styles.comparisonDelta, { color: accent }]}>{formatDelta(kind, delta)}</Text>
@@ -1027,7 +1065,7 @@ function Stat({
   accent?: string;
 }) {
   return (
-    <View style={[styles.stat, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.stat, { backgroundColor: colors.card, borderColor: colors.border }]}> 
       <Ionicons name={icon} size={18} color={accent ?? colors.primary} />
       <Text style={[styles.statVal, { color: accent ?? colors.foreground }]}>{value}</Text>
       <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>{label}</Text>
