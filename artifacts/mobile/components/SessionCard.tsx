@@ -67,6 +67,13 @@ export function SessionCard({ session, onPress }: Props) {
             </View>
           )}
 
+          {session.athletePerformanceLevel && (
+            <View style={[styles.levelPill, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="podium-outline" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.levelText, { color: colors.mutedForeground }]}>{session.athletePerformanceLevel}</Text>
+            </View>
+          )}
+
           {volumeStatus && (
             <View style={[styles.statusPill, { backgroundColor: `${volumeStatus.color}18` }]}>
               <Ionicons name={volumeStatus.icon} size={13} color={volumeStatus.color} />
@@ -184,6 +191,19 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  levelPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  levelText: {
+    fontSize: 9,
     fontFamily: 'Inter_600SemiBold',
   },
   statusPill: {
