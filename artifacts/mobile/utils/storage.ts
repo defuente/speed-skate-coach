@@ -17,7 +17,7 @@ const STORAGE_KEY = '@patincrono/storage';
 const LEGACY_ATHLETES_KEY = '@patincrono/athletes';
 const ATHLETES_V2_KEY = '@patincrono/athletes_v2';
 const SCHEMA_VERSION_KEY = '@patincrono/schema_version';
-const ATHLETE_SCHEMA_VERSION = '5';
+const ATHLETE_SCHEMA_VERSION = '6';
 
 interface StorageData {
   appSettings: AppSettings;
@@ -361,13 +361,25 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
     const athleteCategoryHistoryId = athlete.birthDate
       ? undefined
       : session.athleteCategoryHistoryId ?? legacyCategoryEntry?.id;
+    const athletePerformanceLevel =
+      session.athletePerformanceLevel ??
+      (schemaVersion !== ATHLETE_SCHEMA_VERSION ? athlete.performanceLevel : undefined);
 
     const identityMatches =
       session.athleteId === athlete.id && session.athleteName === athlete.name;
     const categoryMatches = session.athleteCategory === athleteCategory;
     const categoryIdMatches = session.athleteCategoryHistoryId === athleteCategoryHistoryId;
+    const performanceLevelMatches =
+      session.athletePerformanceLevel === athletePerformanceLevel;
 
-    if (identityMatches && categoryMatches && categoryIdMatches) return session;
+    if (
+      identityMatches &&
+      categoryMatches &&
+      categoryIdMatches &&
+      performanceLevelMatches
+    ) {
+      return session;
+    }
 
     sessionsChanged = true;
     return {
@@ -376,6 +388,7 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
       athleteName: athlete.name,
       athleteCategory,
       athleteCategoryHistoryId,
+      athletePerformanceLevel,
     };
   });
 
@@ -499,7 +512,9 @@ export async function updateAthlete(
     : current.performanceLevel;
   const category = birthDate ? getCurrentAgeCategory(birthDate) : undefined;
   const categoryHistory = applyCategoryChange(current, category, now);
-  const shouldBackfillPerformanceLevel = !current.performanceLevel && !!performanceLevel;
+  const shouldBackfillPerformanceLevel =
+    !!performanceLevel &&
+    (!current.performanceLevel || current.performanceLevel === performanceLevel);
 
   const updated: Athlete = {
     ...current,
