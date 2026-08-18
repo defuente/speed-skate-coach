@@ -113,7 +113,6 @@ export default function AthleteDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState('');
   const [editBirthDate, setEditBirthDate] = useState('');
-  const [editCategory, setEditCategory] = useState('');
   const [editClub, setEditClub] = useState('');
   const [editNotes, setEditNotes] = useState('');
 
@@ -270,11 +269,19 @@ export default function AthleteDetailScreen() {
     if (!athlete) return;
     setEditName(athlete.name);
     setEditBirthDate(formatBirthDateDisplay(athlete.birthDate));
-    setEditCategory(athlete.category ?? '');
     setEditClub(athlete.club ?? '');
     setEditNotes(athlete.notes ?? '');
     setEditVisible(true);
   };
+
+  const openClassification = useCallback(() => {
+    if (!athlete) return;
+    setEditVisible(false);
+    router.push({
+      pathname: '/athlete/categories/[name]',
+      params: { name: athlete.id },
+    } as unknown as Href);
+  }, [athlete, router]);
 
   const saveProfile = useCallback(async () => {
     if (!athlete) return;
@@ -298,7 +305,6 @@ export default function AthleteDetailScreen() {
       const updated = await updateAthlete(athlete.id, {
         name: cleanName,
         birthDate: parsedBirthDate,
-        category: editCategory.trim() || undefined,
         club: editClub.trim() || undefined,
         notes: editNotes.trim() || undefined,
       });
@@ -314,7 +320,7 @@ export default function AthleteDetailScreen() {
     } finally {
       setSaving(false);
     }
-  }, [athlete, editBirthDate, editCategory, editClub, editName, editNotes]);
+  }, [athlete, editBirthDate, editClub, editName, editNotes]);
 
   const removeAthlete = useCallback(() => {
     if (!athlete) return;
@@ -410,19 +416,25 @@ export default function AthleteDetailScreen() {
             <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
               {sessions.length} sesión{sessions.length !== 1 ? 'es' : ''} registradas
             </Text>
-            {(athlete.category || athlete.club) && (
+            {(athlete.category || athlete.performanceLevel || athlete.club) && (
               <Text style={[styles.identityMeta, { color: colors.primary }]}>
-                {[athlete.category, athlete.club].filter(Boolean).join(' · ')}
+                {[athlete.category, athlete.performanceLevel, athlete.club].filter(Boolean).join(' · ')}
               </Text>
             )}
           </View>
         </View>
 
-        {(athlete.birthDate || athlete.category || athlete.club || athlete.notes) && (
+        {(athlete.birthDate || athlete.category || athlete.performanceLevel || athlete.club || athlete.notes) && (
           <View
             style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ficha del deportista</Text>
+            <View style={styles.profileHeaderRow}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ficha del deportista</Text>
+              <TouchableOpacity onPress={openClassification} style={[styles.classificationLink, { backgroundColor: `${colors.primary}12` }]}>
+                <Ionicons name="ribbon-outline" size={14} color={colors.primary} />
+                <Text style={[styles.classificationLinkText, { color: colors.primary }]}>Clasificación</Text>
+              </TouchableOpacity>
+            </View>
             {athlete.birthDate && (
               <ProfileRow
                 icon="calendar-outline"
@@ -434,10 +446,23 @@ export default function AthleteDetailScreen() {
             {athlete.category && (
               <ProfileRow
                 icon="ribbon-outline"
-                label="Categoría actual"
+                label="Categoría etaria"
                 value={athlete.category}
                 colors={colors}
               />
+            )}
+            {athlete.performanceLevel && (
+              <ProfileRow
+                icon="podium-outline"
+                label="Nivel de rendimiento"
+                value={athlete.performanceLevel}
+                colors={colors}
+              />
+            )}
+            {!athlete.birthDate && athlete.performanceLevel && (
+              <Text style={[styles.categoryEditHint, { color: colors.mutedForeground }]}>
+                Sin fecha de nacimiento no se asigna categoría etaria; el nivel de rendimiento se conserva igualmente.
+              </Text>
             )}
             {athlete.club && (
               <ProfileRow icon="shield-outline" label="Club / equipo" value={athlete.club} colors={colors} />
@@ -453,13 +478,13 @@ export default function AthleteDetailScreen() {
           </View>
         )}
 
-        {categoryHistory.length > 0 && (
+        {categoryHistory.length > 0 && athlete.birthDate && (
           <View
             style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Historial de categorías</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Historial de categorías etarias</Text>
             <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-              Cada cambio conserva la categoría asociada a las sesiones de esa etapa.
+              Referencia histórica derivada de la fecha de nacimiento. Las sesiones conservan la categoría correspondiente a su año.
             </Text>
             {categoryHistory.map((entry, index) => {
               const isCurrent = !entry.validTo;
@@ -578,7 +603,7 @@ export default function AthleteDetailScreen() {
             style={[styles.analyticsCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Analítica avanzada</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}> 
               Filtra por etapa deportiva y contexto comparable antes de evaluar la evolución.
             </Text>
 
@@ -591,7 +616,7 @@ export default function AthleteDetailScreen() {
 
             {availableCategories.length > 0 && (
               <>
-                <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>CATEGORÍA</Text>
+                <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>CATEGORÍA ETARIA</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
                   <FilterChip label="Todas" selected={categoryFilter === undefined} onPress={() => setCategoryFilter(undefined)} colors={colors} />
                   {availableCategories.map(category => (
@@ -685,12 +710,13 @@ export default function AthleteDetailScreen() {
           >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Lectura de la última sesión</Text>
             <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-              Comparación con la anterior de igual categoría, distancia y tipo cuando existe.
+              Comparación con la anterior de igual categoría etaria, nivel, distancia y tipo cuando existe.
             </Text>
             <View style={[styles.compareContext, { backgroundColor: colors.background }]}>
               <Text style={[styles.compareContextTitle, { color: colors.foreground }]}>
                 {latestSession.trainingType} · {latestSession.distancePerLap} m/v
                 {latestSession.athleteCategory ? ` · ${latestSession.athleteCategory}` : ''}
+                {latestSession.athletePerformanceLevel ? ` · ${latestSession.athletePerformanceLevel}` : ''}
               </Text>
               <Text style={[styles.compareContextDate, { color: colors.mutedForeground }]}>
                 {formatDateShort(latestSession.date)}
@@ -750,7 +776,7 @@ export default function AthleteDetailScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[styles.modalTitle, { color: colors.foreground }]}>Editar deportista</Text>
-                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Datos útiles para seguimiento deportivo</Text>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Datos generales del perfil</Text>
               </View>
               <TouchableOpacity onPress={() => setEditVisible(false)}>
                 <Ionicons name="close" size={22} color={colors.mutedForeground} />
@@ -768,10 +794,18 @@ export default function AthleteDetailScreen() {
                 maxLength={10}
                 colors={colors}
               />
-              <ProfileInput label="CATEGORÍA" value={editCategory} onChangeText={setEditCategory} placeholder="Ej. Mini / Infantil" colors={colors} />
-              <Text style={[styles.categoryEditHint, { color: colors.mutedForeground }]}>
-                Si cambias la categoría, la anterior se conservará en el historial y la nueva quedará vigente desde hoy.
-              </Text>
+              <TouchableOpacity
+                onPress={openClassification}
+                activeOpacity={0.75}
+                style={[styles.classificationEditor, { backgroundColor: colors.background, borderColor: colors.border }]}
+              >
+                <Ionicons name="ribbon-outline" size={19} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.classificationEditorTitle, { color: colors.foreground }]}>Clasificación deportiva</Text>
+                  <Text style={[styles.classificationEditorSub, { color: colors.mutedForeground }]}>Categoría etaria automática y nivel de rendimiento</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={colors.primary} />
+              </TouchableOpacity>
               <ProfileInput label="CLUB / EQUIPO" value={editClub} onChangeText={setEditClub} placeholder="Ej. Colo Colo" colors={colors} />
               <ProfileInput label="OBSERVACIONES" value={editNotes} onChangeText={setEditNotes} placeholder="Notas del entrenador" colors={colors} multiline />
             </ScrollView>
@@ -1065,6 +1099,9 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
+  profileHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  classificationLink: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 18, paddingHorizontal: 9, paddingVertical: 5 },
+  classificationLinkText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   profileRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   profileRowBody: { flex: 1 },
   profileLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
@@ -1205,7 +1242,18 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 10, letterSpacing: 0.7, fontFamily: 'Inter_600SemiBold' },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15 },
   inputMultiline: { minHeight: 82, textAlignVertical: 'top' },
-  categoryEditHint: { fontSize: 10, lineHeight: 14, marginTop: -5, marginBottom: 8 },
+  categoryEditHint: { fontSize: 10, lineHeight: 14, marginTop: 2, marginBottom: 4 },
+  classificationEditor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 11,
+    padding: 12,
+    marginBottom: 10,
+  },
+  classificationEditorTitle: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  classificationEditorSub: { fontSize: 9, lineHeight: 13, marginTop: 1 },
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10 },
 });
