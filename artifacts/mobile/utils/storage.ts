@@ -6,7 +6,7 @@ const STORAGE_KEY = '@patincrono/storage';
 const LEGACY_ATHLETES_KEY = '@patincrono/athletes';
 const ATHLETES_V2_KEY = '@patincrono/athletes_v2';
 const SCHEMA_VERSION_KEY = '@patincrono/schema_version';
-const ATHLETE_SCHEMA_VERSION = '3';
+const ATHLETE_SCHEMA_VERSION = '4';
 
 interface StorageData {
   appSettings: AppSettings;
@@ -29,6 +29,10 @@ export function normalizeAthleteName(name: string): string {
 function normalizeCategory(category?: string): string | undefined {
   const clean = category?.trim();
   return clean || undefined;
+}
+
+function categoryKey(category?: string): string {
+  return normalizeCategory(category)?.toLocaleLowerCase() ?? '';
 }
 
 function createId(prefix: string): string {
@@ -66,23 +70,66 @@ function normalizeCategoryHistory(
     .sort((a, b) => new Date(a.validFrom).getTime() - new Date(b.validFrom).getTime());
 }
 
-export function getAthleteCategoryAtDate(
+export function getAthleteCategoryEntryAtDate(
   athlete: Athlete,
   date: string,
-): string | undefined {
+): AthleteCategoryHistoryEntry | undefined {
   const timestamp = new Date(date).getTime();
   if (!Number.isFinite(timestamp)) return undefined;
 
-  const history = normalizeCategoryHistory(athlete.categoryHistory);
-  const entry = [...history]
+  return [...normalizeCategoryHistory(athlete.categoryHistory)]
     .reverse()
     .find(item => {
       const from = new Date(item.validFrom).getTime();
       const to = item.validTo ? new Date(item.validTo).getTime() : Number.POSITIVE_INFINITY;
       return Number.isFinite(from) && timestamp >= from && timestamp < to;
     });
+}
 
-  return entry?.category;
+export function getAthleteCategoryAtDate(
+  athlete: Athlete,
+  date: string,
+): string | undefined {
+  return getAthleteCategoryEntryAtDate(athlete, date)?.category;
+}
+
+function resolveSessionCategoryEntry(
+  athlete: Athlete,
+  session: Session,
+): AthleteCategoryHistoryEntry | undefined {
+  const history = normalizeCategoryHistory(athlete.categoryHistory);
+
+  if (session.athleteCategoryHistoryId) {
+    const explicit = history.find(entry => entry.id === session.athleteCategoryHistoryId);
+    if (explicit) return explicit;
+  }
+
+  const byDate = getAthleteCategoryEntryAtDate(athlete, session.date);
+  if (
+    byDate &&
+    (!session.athleteCategory || categoryKey(byDate.category) === categoryKey(session.athleteCategory))
+  ) {
+    return byDate;
+  }
+
+  if (session.athleteCategory) {
+    const sameName = history.filter(
+      entry => categoryKey(entry.category) === categoryKey(session.athleteCategory),
+    );
+    if (sameName.length === 1) return sameName[0];
+  }
+
+  return byDate;
+}
+
+function sessionBelongsToCategoryEntry(
+  session: Session,
+  entry: AthleteCategoryHistoryEntry,
+): boolean {
+  if (session.athleteCategoryHistoryId) {
+    return session.athleteCategoryHistoryId === entry.id;
+  }
+  return categoryKey(session.athleteCategory) === categoryKey(entry.category);
 }
 
 function applyCategoryChange(
@@ -103,6 +150,33 @@ function applyCategoryChange(
   return cleanNext
     ? [...closed, createCategoryHistoryEntry(cleanNext, changedAt)]
     : closed;
+}
+
+function repairHistoryAfterRemoval(
+  history: AthleteCategoryHistoryEntry[],
+  removed: AthleteCategoryHistoryEntry,
+): AthleteCategoryHistoryEntry[] {
+  const next = normalizeCategoryHistory(history.filter(entry => entry.id !== removed.id));
+  if (!next.length) return [];
+
+  if (!removed.validTo) {
+    const lastIndex = next.length - 1;
+    next[lastIndex] = { ...next[lastIndex], validTo: undefined };
+    return next;
+  }
+
+  const removedFrom = new Date(removed.validFrom).getTime();
+  let previousIndex = -1;
+  for (let index = 0; index < next.length; index += 1) {
+    const from = new Date(next[index].validFrom).getTime();
+    if (Number.isFinite(from) && from < removedFrom) previousIndex = index;
+  }
+
+  if (previousIndex >= 0) {
+    next[previousIndex] = { ...next[previousIndex], validTo: removed.validTo };
+  }
+
+  return next;
 }
 
 function createAthlete(name: string): Athlete {
@@ -246,13 +320,15 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
 
     if (!athlete) return session;
 
-    const athleteCategory =
-      session.athleteCategory ?? getAthleteCategoryAtDate(athlete, session.date);
+    const categoryEntry = resolveSessionCategoryEntry(athlete, session);
+    const athleteCategory = session.athleteCategory ?? categoryEntry?.category;
+    const athleteCategoryHistoryId = session.athleteCategoryHistoryId ?? categoryEntry?.id;
     const identityMatches =
       session.athleteId === athlete.id && session.athleteName === athlete.name;
     const categoryMatches = session.athleteCategory === athleteCategory;
+    const categoryIdMatches = session.athleteCategoryHistoryId === athleteCategoryHistoryId;
 
-    if (identityMatches && categoryMatches) return session;
+    if (identityMatches && categoryMatches && categoryIdMatches) return session;
 
     sessionsChanged = true;
     return {
@@ -260,6 +336,7 @@ async function ensureAthleteMigration(): Promise<{ athletes: Athlete[]; sessions
       athleteId: athlete.id,
       athleteName: athlete.name,
       athleteCategory,
+      athleteCategoryHistoryId,
     };
   });
 
@@ -420,17 +497,151 @@ export async function saveSession(session: Session): Promise<void> {
     }
     if (!athlete) athlete = await upsertAthlete(session.athleteName);
 
+    const categoryEntry = getAthleteCategoryEntryAtDate(athlete, session.date);
     normalizedSession = {
       ...session,
       athleteId: athlete.id,
       athleteName: athlete.name,
-      athleteCategory: getAthleteCategoryAtDate(athlete, session.date),
+      athleteCategory: categoryEntry?.category,
+      athleteCategoryHistoryId: categoryEntry?.id,
     };
   }
 
   const sessions = await getSessions();
   sessions.unshift(normalizedSession);
   await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+}
+
+export async function reassignAthleteSessionCategory(
+  athleteId: string,
+  sessionId: string,
+  targetEntryId: string,
+): Promise<Session> {
+  const athletes = await getAthleteProfiles();
+  const athlete = athletes.find(item => item.id === athleteId);
+  if (!athlete) throw new Error('Deportista no encontrado');
+
+  const target = normalizeCategoryHistory(athlete.categoryHistory).find(
+    entry => entry.id === targetEntryId,
+  );
+  if (!target) throw new Error('Categoría de destino no encontrada');
+
+  const sessions = await getSessions();
+  const index = sessions.findIndex(
+    session => session.id === sessionId && session.athleteId === athleteId,
+  );
+  if (index < 0) throw new Error('Sesión no encontrada');
+
+  const updated: Session = {
+    ...sessions[index],
+    athleteCategory: target.category,
+    athleteCategoryHistoryId: target.id,
+  };
+  const next = [...sessions];
+  next[index] = updated;
+  await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
+  return updated;
+}
+
+export async function reassignAthleteCategorySessions(
+  athleteId: string,
+  fromEntryId: string,
+  targetEntryId: string,
+): Promise<number> {
+  if (fromEntryId === targetEntryId) return 0;
+
+  const athletes = await getAthleteProfiles();
+  const athlete = athletes.find(item => item.id === athleteId);
+  if (!athlete) throw new Error('Deportista no encontrado');
+
+  const history = normalizeCategoryHistory(athlete.categoryHistory);
+  const source = history.find(entry => entry.id === fromEntryId);
+  const target = history.find(entry => entry.id === targetEntryId);
+  if (!source || !target) throw new Error('Categoría no encontrada');
+
+  const sessions = await getSessions();
+  let moved = 0;
+  const updatedSessions = sessions.map(session => {
+    if (session.athleteId !== athleteId || !sessionBelongsToCategoryEntry(session, source)) {
+      return session;
+    }
+    moved += 1;
+    return {
+      ...session,
+      athleteCategory: target.category,
+      athleteCategoryHistoryId: target.id,
+    };
+  });
+
+  if (moved > 0) {
+    await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(updatedSessions));
+  }
+  return moved;
+}
+
+export async function deleteAthleteCategoryHistoryEntry(
+  athleteId: string,
+  entryId: string,
+  reassignToEntryId?: string,
+): Promise<Athlete> {
+  const athletes = await getAthleteProfiles();
+  const athleteIndex = athletes.findIndex(item => item.id === athleteId);
+  if (athleteIndex < 0) throw new Error('Deportista no encontrado');
+
+  const current = athletes[athleteIndex];
+  const history = normalizeCategoryHistory(current.categoryHistory);
+  const removed = history.find(entry => entry.id === entryId);
+  if (!removed) throw new Error('Categoría no encontrada');
+
+  const target = reassignToEntryId
+    ? history.find(entry => entry.id === reassignToEntryId && entry.id !== entryId)
+    : undefined;
+  if (reassignToEntryId && !target) throw new Error('Categoría de destino no encontrada');
+
+  const sessions = await getSessions();
+  const affectedSessions = sessions.filter(
+    session =>
+      session.athleteId === athleteId && sessionBelongsToCategoryEntry(session, removed),
+  );
+
+  if (affectedSessions.length > 0 && !target) {
+    throw new Error(
+      `La categoría tiene ${affectedSessions.length} sesión${affectedSessions.length !== 1 ? 'es' : ''}. Reasígnalas antes de eliminarla.`,
+    );
+  }
+
+  const updatedSessions = sessions.map(session => {
+    if (
+      session.athleteId !== athleteId ||
+      !sessionBelongsToCategoryEntry(session, removed) ||
+      !target
+    ) {
+      return session;
+    }
+    return {
+      ...session,
+      athleteCategory: target.category,
+      athleteCategoryHistoryId: target.id,
+    };
+  });
+
+  const repairedHistory = repairHistoryAfterRemoval(history, removed);
+  const activeEntry = [...repairedHistory].reverse().find(entry => !entry.validTo);
+  const updatedAthlete: Athlete = {
+    ...current,
+    category: activeEntry?.category,
+    categoryHistory: repairedHistory,
+    updatedAt: new Date().toISOString(),
+  };
+  const nextAthletes = [...athletes];
+  nextAthletes[athleteIndex] = updatedAthlete;
+
+  await Promise.all([
+    persistAthletes(nextAthletes),
+    AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(updatedSessions)),
+  ]);
+
+  return updatedAthlete;
 }
 
 export async function deleteSession(id: string): Promise<void> {
