@@ -30,6 +30,11 @@ interface CategoryFilter {
   current: boolean;
 }
 
+interface PerformanceLevelFilter {
+  key: string;
+  label: string;
+}
+
 interface TrainingTypeFilter {
   key: string;
   label: string;
@@ -55,6 +60,7 @@ export default function HistoryScreen() {
   const [exporting, setExporting] = useState(false);
   const [selectedAthleteKey, setSelectedAthleteKey] = useState('all');
   const [selectedCategoryKey, setSelectedCategoryKey] = useState('all');
+  const [selectedPerformanceLevelKey, setSelectedPerformanceLevelKey] = useState('all');
   const [selectedTrainingTypeKey, setSelectedTrainingTypeKey] = useState('all');
 
   const load = useCallback(async () => {
@@ -134,6 +140,20 @@ export default function HistoryScreen() {
       });
   }, [athleteScopedSessions, selectedAthlete, selectedAthleteKey]);
 
+  const performanceLevelFilters = useMemo<PerformanceLevelFilter[]>(() => {
+    if (selectedAthleteKey === 'all') return [];
+
+    const names = new Map<string, string>();
+    athleteScopedSessions.forEach(session => {
+      const clean = session.athletePerformanceLevel?.trim();
+      if (clean) names.set(normalizedKey(clean), clean);
+    });
+
+    return [...names.entries()]
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+  }, [athleteScopedSessions, selectedAthleteKey]);
+
   const trainingTypeFilters = useMemo<TrainingTypeFilter[]>(() => {
     if (selectedAthleteKey === 'all') return [];
 
@@ -158,14 +178,25 @@ export default function HistoryScreen() {
     [athleteScopedSessions, selectedCategoryKey],
   );
 
+  const performanceLevelScopedSessions = useMemo(
+    () =>
+      selectedPerformanceLevelKey === 'all'
+        ? categoryScopedSessions
+        : categoryScopedSessions.filter(
+            session =>
+              normalizedKey(session.athletePerformanceLevel) === selectedPerformanceLevelKey,
+          ),
+    [categoryScopedSessions, selectedPerformanceLevelKey],
+  );
+
   const filteredSessions = useMemo(
     () =>
       selectedTrainingTypeKey === 'all'
-        ? categoryScopedSessions
-        : categoryScopedSessions.filter(
+        ? performanceLevelScopedSessions
+        : performanceLevelScopedSessions.filter(
             session => normalizedKey(session.trainingType) === selectedTrainingTypeKey,
           ),
-    [categoryScopedSessions, selectedTrainingTypeKey],
+    [performanceLevelScopedSessions, selectedTrainingTypeKey],
   );
 
   const selectAthlete = useCallback(
@@ -176,6 +207,7 @@ export default function HistoryScreen() {
       );
       const currentCategory = normalizedKey(profile?.category);
       setSelectedCategoryKey(currentCategory || 'all');
+      setSelectedPerformanceLevelKey('all');
       setSelectedTrainingTypeKey('all');
     },
     [athletes],
@@ -184,6 +216,7 @@ export default function HistoryScreen() {
   const clearAthleteFilter = useCallback(() => {
     setSelectedAthleteKey('all');
     setSelectedCategoryKey('all');
+    setSelectedPerformanceLevelKey('all');
     setSelectedTrainingTypeKey('all');
   }, []);
 
@@ -214,6 +247,7 @@ export default function HistoryScreen() {
   const filtered =
     selectedAthleteKey !== 'all' ||
     selectedCategoryKey !== 'all' ||
+    selectedPerformanceLevelKey !== 'all' ||
     selectedTrainingTypeKey !== 'all';
 
   return (
@@ -304,6 +338,35 @@ export default function HistoryScreen() {
             </>
           )}
 
+          {selectedAthleteKey !== 'all' && performanceLevelFilters.length > 1 && (
+            <>
+              <Text style={[styles.filterLabel, styles.secondaryFilterLabel, { color: colors.mutedForeground }]}>NIVEL DE RENDIMIENTO</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterScroll}
+              >
+                <FilterChip
+                  label="Todos"
+                  icon="bar-chart-outline"
+                  selected={selectedPerformanceLevelKey === 'all'}
+                  onPress={() => setSelectedPerformanceLevelKey('all')}
+                  colors={colors}
+                />
+                {performanceLevelFilters.map(level => (
+                  <FilterChip
+                    key={level.key}
+                    label={level.label}
+                    icon="podium-outline"
+                    selected={selectedPerformanceLevelKey === level.key}
+                    onPress={() => setSelectedPerformanceLevelKey(level.key)}
+                    colors={colors}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          )}
+
           {selectedAthleteKey !== 'all' && trainingTypeFilters.length > 1 && (
             <>
               <Text style={[styles.filterLabel, styles.secondaryFilterLabel, { color: colors.mutedForeground }]}>TIPO DE ENTRENAMIENTO</Text>
@@ -349,7 +412,7 @@ export default function HistoryScreen() {
         <View style={styles.empty}>
           <Ionicons name="filter-outline" size={50} color={colors.mutedForeground} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Sin sesiones para este filtro</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Prueba otra categoría, tipo de entrenamiento o selecciona todos.</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Prueba otra categoría, nivel de rendimiento, tipo de entrenamiento o selecciona todos.</Text>
         </View>
       ) : (
         <FlatList
