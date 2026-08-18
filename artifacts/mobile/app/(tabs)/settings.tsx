@@ -170,7 +170,7 @@ export default function SettingsScreen() {
         <SectionLabel text="ACERCA DE" colors={colors} />
         <View style={[styles.card, styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Image
-            source={require('../../assets/images/icon_2.png')}
+            source={require('../../assets/images/icon.png')}
             style={styles.appLogo}
             resizeMode="contain"
           />
