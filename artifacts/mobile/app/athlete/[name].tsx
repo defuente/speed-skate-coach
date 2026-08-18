@@ -32,6 +32,7 @@ import {
   compareSessions,
   filterAthleteSessions,
   findPreviousComparableSession,
+  getAvailableCategories,
   getAvailableDistances,
 } from '@/utils/athleteAnalytics';
 import { SessionCard } from '@/components/SessionCard';
@@ -88,6 +89,16 @@ function parseBirthDateInput(value: string): string | undefined | null {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function formatHistoryDate(value: string): string {
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  return value;
+}
+
+function categoryKey(value?: string): string {
+  return value?.trim().toLocaleLowerCase() ?? '';
+}
+
 export default function AthleteDetailScreen() {
   const params = useLocalSearchParams<{ name: string }>();
   const identifier = Array.isArray(params.name) ? params.name[0] : params.name || '';
@@ -107,6 +118,7 @@ export default function AthleteDetailScreen() {
   const [editNotes, setEditNotes] = useState('');
 
   const [rangeDays, setRangeDays] = useState<number | undefined>();
+  const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
   const [distanceFilter, setDistanceFilter] = useState<number | undefined>();
   const [trainingTypeFilter, setTrainingTypeFilter] = useState<TrainingType | undefined>();
   const [metric, setMetric] = useState<AthleteMetric>('bestLap');
@@ -114,9 +126,10 @@ export default function AthleteDetailScreen() {
   const load = useCallback(async () => {
     const profiles = await getAthleteProfiles();
     const key = normalizeAthleteName(identifier);
-    const found = profiles.find(
-      profile => profile.id === identifier || normalizeAthleteName(profile.name) === key,
-    ) ?? null;
+    const found =
+      profiles.find(
+        profile => profile.id === identifier || normalizeAthleteName(profile.name) === key,
+      ) ?? null;
 
     setAthlete(found);
     setSessions(found ? await getAthleteSessions(found.id) : []);
@@ -157,7 +170,9 @@ export default function AthleteDetailScreen() {
     const averagePaceCompliance = paceSessions.length
       ? paceSessions.reduce(
           (sum, session) =>
-            sum + calculateStats(session.laps, session.distancePerLap, session.targetLapTimeMs).targetCompliance,
+            sum +
+            calculateStats(session.laps, session.distancePerLap, session.targetLapTimeMs)
+              .targetCompliance,
           0,
         ) / paceSessions.length
       : 0;
@@ -203,6 +218,15 @@ export default function AthleteDetailScreen() {
     return [...byDistance.values()].sort((a, b) => a.distance - b.distance);
   }, [sessions]);
 
+  const categoryHistory = useMemo(
+    () =>
+      [...(athlete?.categoryHistory ?? [])].sort(
+        (a, b) => new Date(b.validFrom).getTime() - new Date(a.validFrom).getTime(),
+      ),
+    [athlete?.categoryHistory],
+  );
+
+  const availableCategories = useMemo(() => getAvailableCategories(sessions), [sessions]);
   const availableDistances = useMemo(() => getAvailableDistances(sessions), [sessions]);
   const availableTypes = useMemo(
     () => TRAINING_TYPES.filter(type => sessions.some(session => session.trainingType === type)),
@@ -213,10 +237,11 @@ export default function AthleteDetailScreen() {
     () =>
       filterAthleteSessions(sessions, {
         rangeDays,
+        category: categoryFilter,
         distancePerLap: distanceFilter,
         trainingType: trainingTypeFilter,
       }),
-    [sessions, rangeDays, distanceFilter, trainingTypeFilter],
+    [sessions, rangeDays, categoryFilter, distanceFilter, trainingTypeFilter],
   );
 
   const metricDefinition = METRICS.find(item => item.key === metric) ?? METRICS[0];
@@ -227,17 +252,16 @@ export default function AthleteDetailScreen() {
 
   const latestSession = useMemo(
     () =>
-      [...sessions]
+      [...filteredSessions]
         .filter(session => session.laps.length > 0)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
-    [sessions],
+    [filteredSessions],
   );
   const previousComparable = latestSession
-    ? findPreviousComparableSession(sessions, latestSession)
+    ? findPreviousComparableSession(filteredSessions, latestSession)
     : undefined;
-  const comparison = latestSession && previousComparable
-    ? compareSessions(latestSession, previousComparable)
-    : null;
+  const comparison =
+    latestSession && previousComparable ? compareSessions(latestSession, previousComparable) : null;
   const insights = latestSession
     ? buildPerformanceInsights(latestSession, previousComparable)
     : [];
@@ -280,6 +304,7 @@ export default function AthleteDetailScreen() {
       });
       setAthlete(updated);
       setSessions(await getAthleteSessions(updated.id));
+      setCategoryFilter(undefined);
       setEditVisible(false);
     } catch (error) {
       Alert.alert(
@@ -323,7 +348,12 @@ export default function AthleteDetailScreen() {
   if (!athlete) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + webTop + 12, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top + webTop + 12, borderBottomColor: colors.border },
+          ]}
+        >
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={27} color={colors.foreground} />
           </TouchableOpacity>
@@ -339,7 +369,12 @@ export default function AthleteDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + webTop + 12, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + webTop + 12, borderBottomColor: colors.border },
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={27} color={colors.foreground} />
         </TouchableOpacity>
@@ -347,16 +382,25 @@ export default function AthleteDetailScreen() {
           {athlete.name}
         </Text>
         <View style={styles.actions}>
-          <TouchableOpacity onPress={openEdit} style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={openEdit}
+            style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Ionicons name="pencil-outline" size={19} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={removeAthlete} style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={removeAthlete}
+            style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Ionicons name="trash-outline" size={19} color={colors.destructive} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 28 }]}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 28 }]}
+      >
         <View style={[styles.hero, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.avatar, { backgroundColor: `${colors.primary}18` }]}>
             <Ionicons name="person" size={34} color={colors.primary} />
@@ -375,31 +419,145 @@ export default function AthleteDetailScreen() {
         </View>
 
         {(athlete.birthDate || athlete.category || athlete.club || athlete.notes) && (
-          <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ficha del deportista</Text>
-            {athlete.birthDate && <ProfileRow icon="calendar-outline" label="Nacimiento" value={formatBirthDateDisplay(athlete.birthDate)} colors={colors} />}
-            {athlete.category && <ProfileRow icon="ribbon-outline" label="Categoría" value={athlete.category} colors={colors} />}
-            {athlete.club && <ProfileRow icon="shield-outline" label="Club / equipo" value={athlete.club} colors={colors} />}
-            {athlete.notes && <ProfileRow icon="document-text-outline" label="Observaciones" value={athlete.notes} colors={colors} />}
+            {athlete.birthDate && (
+              <ProfileRow
+                icon="calendar-outline"
+                label="Nacimiento"
+                value={formatBirthDateDisplay(athlete.birthDate)}
+                colors={colors}
+              />
+            )}
+            {athlete.category && (
+              <ProfileRow
+                icon="ribbon-outline"
+                label="Categoría actual"
+                value={athlete.category}
+                colors={colors}
+              />
+            )}
+            {athlete.club && (
+              <ProfileRow icon="shield-outline" label="Club / equipo" value={athlete.club} colors={colors} />
+            )}
+            {athlete.notes && (
+              <ProfileRow
+                icon="document-text-outline"
+                label="Observaciones"
+                value={athlete.notes}
+                colors={colors}
+              />
+            )}
+          </View>
+        )}
+
+        {categoryHistory.length > 0 && (
+          <View
+            style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Historial de categorías</Text>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+              Cada cambio conserva la categoría asociada a las sesiones de esa etapa.
+            </Text>
+            {categoryHistory.map((entry, index) => {
+              const isCurrent = !entry.validTo;
+              const sessionCount = sessions.filter(
+                session => categoryKey(session.athleteCategory) === categoryKey(entry.category),
+              ).length;
+              return (
+                <View
+                  key={entry.id}
+                  style={[
+                    styles.categoryRow,
+                    index > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+                  ]}
+                >
+                  <View style={[styles.categoryDot, { backgroundColor: isCurrent ? colors.lapBest : colors.primary }]} />
+                  <View style={styles.categoryBody}>
+                    <View style={styles.categoryTitleRow}>
+                      <Text style={[styles.categoryName, { color: colors.foreground }]}>{entry.category}</Text>
+                      {isCurrent && (
+                        <View style={[styles.currentBadge, { backgroundColor: `${colors.lapBest}20` }]}>
+                          <Text style={[styles.currentBadgeText, { color: colors.lapBest }]}>Actual</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.categoryPeriod, { color: colors.mutedForeground }]}>
+                      Desde {formatHistoryDate(entry.validFrom)}
+                      {entry.validTo ? ` · hasta ${formatHistoryDate(entry.validTo)}` : ''}
+                    </Text>
+                    <Text style={[styles.categorySessions, { color: colors.primary }]}>
+                      {sessionCount} sesión{sessionCount !== 1 ? 'es' : ''} registradas en esta categoría
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
         <View style={styles.grid}>
           <Stat icon="layers-outline" label="Sesiones" value={String(sessions.length)} colors={colors} />
           <Stat icon="flag-outline" label="Vueltas" value={String(summaryStats.totalLaps)} colors={colors} />
-          <Stat icon="trophy-outline" label="Mejor vuelta" value={summaryStats.bestLap ? formatTime(summaryStats.bestLap) : '—'} colors={colors} accent={summaryStats.bestLap ? colors.lapBest : undefined} />
+          <Stat
+            icon="trophy-outline"
+            label="Mejor vuelta"
+            value={summaryStats.bestLap ? formatTime(summaryStats.bestLap) : '—'}
+            colors={colors}
+            accent={summaryStats.bestLap ? colors.lapBest : undefined}
+          />
           <Stat icon="time-outline" label="Tiempo total" value={formatTime(summaryStats.totalTime)} colors={colors} />
-          <Stat icon="navigate-outline" label="Distancia" value={`${summaryStats.totalDistance.toFixed(2)} km`} colors={colors} />
-          <Stat icon="speedometer-outline" label="Velocidad máx." value={summaryStats.maxSpeed ? `${summaryStats.maxSpeed.toFixed(1)} km/h` : '—'} colors={colors} accent={summaryStats.maxSpeed ? colors.primary : undefined} />
-          {summaryStats.volumeSessions > 0 && <Stat icon="checkmark-done-outline" label="Volumen medio" value={`${Math.round(summaryStats.averageVolume)}%`} colors={colors} accent={summaryStats.averageVolume >= 80 ? colors.lapBest : colors.primary} />}
-          {summaryStats.paceSessions > 0 && <Stat icon="speedometer-outline" label="Ritmo cumplido" value={`${Math.round(summaryStats.averagePaceCompliance)}%`} colors={colors} accent={summaryStats.averagePaceCompliance >= 80 ? colors.lapBest : colors.primary} />}
-          {summaryStats.consistencySessions > 0 && <Stat icon="pulse-outline" label="Consistencia media" value={`${summaryStats.averageConsistency.toFixed(1)}%`} colors={colors} />}
+          <Stat
+            icon="navigate-outline"
+            label="Distancia"
+            value={`${summaryStats.totalDistance.toFixed(2)} km`}
+            colors={colors}
+          />
+          <Stat
+            icon="speedometer-outline"
+            label="Velocidad máx."
+            value={summaryStats.maxSpeed ? `${summaryStats.maxSpeed.toFixed(1)} km/h` : '—'}
+            colors={colors}
+            accent={summaryStats.maxSpeed ? colors.primary : undefined}
+          />
+          {summaryStats.volumeSessions > 0 && (
+            <Stat
+              icon="checkmark-done-outline"
+              label="Volumen medio"
+              value={`${Math.round(summaryStats.averageVolume)}%`}
+              colors={colors}
+              accent={summaryStats.averageVolume >= 80 ? colors.lapBest : colors.primary}
+            />
+          )}
+          {summaryStats.paceSessions > 0 && (
+            <Stat
+              icon="speedometer-outline"
+              label="Ritmo cumplido"
+              value={`${Math.round(summaryStats.averagePaceCompliance)}%`}
+              colors={colors}
+              accent={summaryStats.averagePaceCompliance >= 80 ? colors.lapBest : colors.primary}
+            />
+          )}
+          {summaryStats.consistencySessions > 0 && (
+            <Stat
+              icon="pulse-outline"
+              label="Consistencia media"
+              value={`${summaryStats.averageConsistency.toFixed(1)}%`}
+              colors={colors}
+            />
+          )}
         </View>
 
         {personalRecords.length > 0 && (
-          <View style={[styles.recordsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[styles.recordsCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Récords personales por distancia</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Solo se comparan vueltas con la misma distancia configurada</Text>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+              Solo se comparan vueltas con la misma distancia configurada
+            </Text>
             {personalRecords.map(record => (
               <View key={record.distance} style={[styles.recordRow, { borderTopColor: colors.border }]}>
                 <View>
@@ -416,9 +574,13 @@ export default function AthleteDetailScreen() {
         )}
 
         {sessions.length > 0 && (
-          <View style={[styles.analyticsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[styles.analyticsCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Analítica avanzada</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Filtra sesiones comparables y elige la métrica que quieres seguir</Text>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+              Filtra por etapa deportiva y contexto comparable antes de evaluar la evolución.
+            </Text>
 
             <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>PERÍODO</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -427,13 +589,37 @@ export default function AthleteDetailScreen() {
               <FilterChip label="90 días" selected={rangeDays === 90} onPress={() => setRangeDays(90)} colors={colors} />
             </ScrollView>
 
+            {availableCategories.length > 0 && (
+              <>
+                <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>CATEGORÍA</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                  <FilterChip label="Todas" selected={categoryFilter === undefined} onPress={() => setCategoryFilter(undefined)} colors={colors} />
+                  {availableCategories.map(category => (
+                    <FilterChip
+                      key={category}
+                      label={category}
+                      selected={categoryKey(categoryFilter) === categoryKey(category)}
+                      onPress={() => setCategoryFilter(category)}
+                      colors={colors}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
             {availableDistances.length > 1 && (
               <>
                 <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>DISTANCIA</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
                   <FilterChip label="Todas" selected={distanceFilter === undefined} onPress={() => setDistanceFilter(undefined)} colors={colors} />
                   {availableDistances.map(distance => (
-                    <FilterChip key={distance} label={`${distance} m`} selected={distanceFilter === distance} onPress={() => setDistanceFilter(distance)} colors={colors} />
+                    <FilterChip
+                      key={distance}
+                      label={`${distance} m`}
+                      selected={distanceFilter === distance}
+                      onPress={() => setDistanceFilter(distance)}
+                      colors={colors}
+                    />
                   ))}
                 </ScrollView>
               </>
@@ -445,7 +631,13 @@ export default function AthleteDetailScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
                   <FilterChip label="Todos" selected={trainingTypeFilter === undefined} onPress={() => setTrainingTypeFilter(undefined)} colors={colors} />
                   {availableTypes.map(type => (
-                    <FilterChip key={type} label={type} selected={trainingTypeFilter === type} onPress={() => setTrainingTypeFilter(type)} colors={colors} />
+                    <FilterChip
+                      key={type}
+                      label={type}
+                      selected={trainingTypeFilter === type}
+                      onPress={() => setTrainingTypeFilter(type)}
+                      colors={colors}
+                    />
                   ))}
                 </ScrollView>
               </>
@@ -454,7 +646,13 @@ export default function AthleteDetailScreen() {
             <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>MÉTRICA</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
               {METRICS.map(item => (
-                <FilterChip key={item.key} label={item.label} selected={metric === item.key} onPress={() => setMetric(item.key)} colors={colors} />
+                <FilterChip
+                  key={item.key}
+                  label={item.label}
+                  selected={metric === item.key}
+                  onPress={() => setMetric(item.key)}
+                  colors={colors}
+                />
               ))}
             </ScrollView>
 
@@ -473,19 +671,33 @@ export default function AthleteDetailScreen() {
               />
             ) : (
               <View style={[styles.noChart, { borderColor: colors.border }]}>
-                <Text style={[styles.noChartText, { color: colors.mutedForeground }]}>Necesitas al menos 2 sesiones con esta métrica y estos filtros.</Text>
+                <Text style={[styles.noChartText, { color: colors.mutedForeground }]}>
+                  Necesitas al menos 2 sesiones con esta métrica y estos filtros.
+                </Text>
               </View>
             )}
           </View>
         )}
 
         {latestSession && (
-          <View style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Lectura de la última sesión</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Comparación con la anterior de igual distancia y tipo cuando existe</Text>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+              Comparación con la anterior de igual categoría, distancia y tipo cuando existe.
+            </Text>
             <View style={[styles.compareContext, { backgroundColor: colors.background }]}>
-              <Text style={[styles.compareContextTitle, { color: colors.foreground }]}>{latestSession.trainingType} · {latestSession.distancePerLap} m/v</Text>
-              <Text style={[styles.compareContextDate, { color: colors.mutedForeground }]}>{formatDateShort(latestSession.date)}{previousComparable ? ` vs ${formatDateShort(previousComparable.date)}` : ' · sin sesión comparable anterior'}</Text>
+              <Text style={[styles.compareContextTitle, { color: colors.foreground }]}>
+                {latestSession.trainingType} · {latestSession.distancePerLap} m/v
+                {latestSession.athleteCategory ? ` · ${latestSession.athleteCategory}` : ''}
+              </Text>
+              <Text style={[styles.compareContextDate, { color: colors.mutedForeground }]}>
+                {formatDateShort(latestSession.date)}
+                {previousComparable
+                  ? ` vs ${formatDateShort(previousComparable.date)}`
+                  : ' · sin sesión comparable anterior'}
+              </Text>
             </View>
 
             {comparison && (
@@ -557,6 +769,9 @@ export default function AthleteDetailScreen() {
                 colors={colors}
               />
               <ProfileInput label="CATEGORÍA" value={editCategory} onChangeText={setEditCategory} placeholder="Ej. Mini / Infantil" colors={colors} />
+              <Text style={[styles.categoryEditHint, { color: colors.mutedForeground }]}>
+                Si cambias la categoría, la anterior se conservará en el historial y la nueva quedará vigente desde hoy.
+              </Text>
               <ProfileInput label="CLUB / EQUIPO" value={editClub} onChangeText={setEditClub} placeholder="Ej. Colo Colo" colors={colors} />
               <ProfileInput label="OBSERVACIONES" value={editNotes} onChangeText={setEditNotes} placeholder="Notas del entrenador" colors={colors} multiline />
             </ScrollView>
@@ -576,15 +791,53 @@ export default function AthleteDetailScreen() {
   );
 }
 
-function FilterChip({ label, selected, onPress, colors }: { label: string; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
+function FilterChip({
+  label,
+  selected,
+  onPress,
+  colors,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.filterChip, { backgroundColor: selected ? colors.primary : colors.background, borderColor: selected ? colors.primary : colors.border }]}>
-      <Text style={[styles.filterChipText, { color: selected ? colors.primaryForeground : colors.foreground }]}>{label}</Text>
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.filterChip,
+        {
+          backgroundColor: selected ? colors.primary : colors.background,
+          borderColor: selected ? colors.primary : colors.border,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.filterChipText,
+          { color: selected ? colors.primaryForeground : colors.foreground },
+        ]}
+      >
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
 
-function MetricChart({ data, labels, metric, lowerIsBetter, colors }: { data: number[]; labels: string[]; metric: AthleteMetric; lowerIsBetter: boolean; colors: ReturnType<typeof useColors> }) {
+function MetricChart({
+  data,
+  labels,
+  metric,
+  lowerIsBetter,
+  colors,
+}: {
+  data: number[];
+  labels: string[];
+  metric: AthleteMetric;
+  lowerIsBetter: boolean;
+  colors: ReturnType<typeof useColors>;
+}) {
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
@@ -602,9 +855,19 @@ function MetricChart({ data, labels, metric, lowerIsBetter, colors }: { data: nu
           const best = lowerIsBetter ? value === min : value === max;
           return (
             <View key={`${labels[index]}-${index}`} style={styles.barCol}>
-              <Text style={[styles.barVal, { color: best ? colors.lapBest : colors.foreground }]}>{formatMetricValue(metric, value)}</Text>
+              <Text style={[styles.barVal, { color: best ? colors.lapBest : colors.foreground }]}>
+                {formatMetricValue(metric, value)}
+              </Text>
               <View style={[styles.track, { height }]}>
-                <View style={[styles.bar, { height: barHeight, backgroundColor: best ? colors.lapBest : `${colors.primary}75` }]} />
+                <View
+                  style={[
+                    styles.bar,
+                    {
+                      height: barHeight,
+                      backgroundColor: best ? colors.lapBest : `${colors.primary}75`,
+                    },
+                  ]}
+                />
               </View>
               <Text style={[styles.barLbl, { color: colors.mutedForeground }]}>{labels[index]}</Text>
             </View>
@@ -615,18 +878,39 @@ function MetricChart({ data, labels, metric, lowerIsBetter, colors }: { data: nu
   );
 }
 
-function ComparisonRow({ label, current, previous, delta, kind, lowerIsBetter = false, colors }: { label: string; current: number | null; previous: number | null; delta: number | null; kind: 'time' | 'percent' | 'speed'; lowerIsBetter?: boolean; colors: ReturnType<typeof useColors> }) {
+function ComparisonRow({
+  label,
+  current,
+  previous,
+  delta,
+  kind,
+  lowerIsBetter = false,
+  colors,
+}: {
+  label: string;
+  current: number | null;
+  previous: number | null;
+  delta: number | null;
+  kind: 'time' | 'percent' | 'speed';
+  lowerIsBetter?: boolean;
+  colors: ReturnType<typeof useColors>;
+}) {
   if (current === null || previous === null || delta === null) return null;
   const improved = Math.abs(delta) < 0.0001 ? null : lowerIsBetter ? delta < 0 : delta > 0;
-  const accent = improved === null ? colors.mutedForeground : improved ? colors.lapBest : colors.lapWorst;
+  const accent =
+    improved === null ? colors.mutedForeground : improved ? colors.lapBest : colors.lapWorst;
   return (
     <View style={[styles.comparisonRow, { borderTopColor: colors.border }]}>
       <View style={styles.comparisonLabelWrap}>
         <Text style={[styles.comparisonLabel, { color: colors.foreground }]}>{label}</Text>
-        <Text style={[styles.comparisonPrevious, { color: colors.mutedForeground }]}>Anterior {formatComparisonValue(kind, previous)}</Text>
+        <Text style={[styles.comparisonPrevious, { color: colors.mutedForeground }]}>
+          Anterior {formatComparisonValue(kind, previous)}
+        </Text>
       </View>
       <View style={styles.comparisonCurrentWrap}>
-        <Text style={[styles.comparisonCurrent, { color: colors.foreground }]}>{formatComparisonValue(kind, current)}</Text>
+        <Text style={[styles.comparisonCurrent, { color: colors.foreground }]}>
+          {formatComparisonValue(kind, current)}
+        </Text>
         <Text style={[styles.comparisonDelta, { color: accent }]}>{formatDelta(kind, delta)}</Text>
       </View>
     </View>
@@ -673,7 +957,17 @@ function ProfileInput({
   );
 }
 
-function ProfileRow({ icon, label, value, colors }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; colors: ReturnType<typeof useColors> }) {
+function ProfileRow({
+  icon,
+  label,
+  value,
+  colors,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useColors>;
+}) {
   return (
     <View style={styles.profileRow}>
       <Ionicons name={icon} size={17} color={colors.primary} />
@@ -685,7 +979,19 @@ function ProfileRow({ icon, label, value, colors }: { icon: keyof typeof Ionicon
   );
 }
 
-function Stat({ icon, label, value, colors, accent }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; colors: ReturnType<typeof useColors>; accent?: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+  colors,
+  accent,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useColors>;
+  accent?: string;
+}) {
   return (
     <View style={[styles.stat, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Ionicons name={icon} size={18} color={accent ?? colors.primary} />
@@ -697,7 +1003,7 @@ function Stat({ icon, label, value, colors, accent }: { icon: keyof typeof Ionic
 
 function formatMetricValue(metric: AthleteMetric, value: number): string {
   if (metric === 'bestLap' || metric === 'averageLap') return formatTime(value);
-  if (metric === 'averageSpeed') return `${value.toFixed(1)}`;
+  if (metric === 'averageSpeed') return value.toFixed(1);
   return `${value.toFixed(1)}%`;
 }
 
@@ -718,34 +1024,101 @@ function formatDelta(kind: 'time' | 'percent' | 'speed', value: number): string 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   headerTitle: { flex: 1, fontSize: 18, fontFamily: 'Inter_700Bold' },
   headerSpacer: { width: 38 },
   actions: { flexDirection: 'row', gap: 8 },
-  iconBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scroll: { paddingTop: 14, gap: 12 },
-  hero: { marginHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 13 },
+  hero: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+  },
   avatar: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   heroBody: { flex: 1 },
   name: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   heroSub: { fontSize: 12, marginTop: 2 },
   identityMeta: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 5 },
-  profileCard: { marginHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
+  profileCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    gap: 10,
+  },
   profileRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   profileRowBody: { flex: 1 },
   profileLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   profileValue: { fontSize: 13, fontFamily: 'Inter_500Medium', marginTop: 1, lineHeight: 18 },
+  categoryCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+  },
+  categoryRow: { flexDirection: 'row', gap: 11, paddingVertical: 11 },
+  categoryDot: { width: 10, height: 10, borderRadius: 5, marginTop: 5 },
+  categoryBody: { flex: 1 },
+  categoryTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  categoryName: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  currentBadge: { borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
+  currentBadgeText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  categoryPeriod: { fontSize: 10, marginTop: 3 },
+  categorySessions: { fontSize: 10, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   grid: { marginHorizontal: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  stat: { width: '48%', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 13, gap: 4 },
+  stat: {
+    width: '48%',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 13,
+    gap: 4,
+  },
   statVal: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   statLbl: { fontSize: 10 },
-  recordsCard: { marginHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
-  recordRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 11, marginTop: 11 },
+  recordsCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+  },
+  recordRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 11,
+    marginTop: 11,
+  },
   recordDistance: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   recordDate: { fontSize: 10, marginTop: 2 },
   recordValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   recordValue: { fontSize: 16, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] },
-  analyticsCard: { marginHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 8 },
+  analyticsCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    gap: 8,
+  },
   filterLabel: { fontSize: 9, letterSpacing: 0.8, fontFamily: 'Inter_600SemiBold', marginTop: 5 },
   chipRow: { gap: 7, paddingRight: 8 },
   filterChip: { borderRadius: 18, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 7 },
@@ -760,14 +1133,34 @@ const styles = StyleSheet.create({
   track: { width: 44, justifyContent: 'flex-end' },
   bar: { width: '100%', borderRadius: 6 },
   barLbl: { fontSize: 9 },
-  noChart: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 18, alignItems: 'center', marginTop: 4 },
+  noChart: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    padding: 18,
+    alignItems: 'center',
+    marginTop: 4,
+  },
   noChartText: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
-  compareCard: { marginHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 9 },
+  compareCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    gap: 9,
+  },
   compareContext: { borderRadius: 10, padding: 10 },
   compareContextTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   compareContextDate: { fontSize: 10, marginTop: 2 },
   comparisonRows: { marginTop: 2 },
-  comparisonRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 9, marginTop: 9, gap: 10 },
+  comparisonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 9,
+    marginTop: 9,
+    gap: 10,
+  },
   comparisonLabelWrap: { flex: 1 },
   comparisonLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   comparisonPrevious: { fontSize: 9, marginTop: 2 },
@@ -779,17 +1172,40 @@ const styles = StyleSheet.create({
   insightText: { flex: 1, fontSize: 11, lineHeight: 16 },
   sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   sectionSub: { fontSize: 11, marginTop: 2 },
-  sessionsHead: { marginHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  none: { marginHorizontal: 16, padding: 24, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center' },
+  sessionsHead: {
+    marginHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  none: {
+    marginHorizontal: 16,
+    padding: 24,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+  },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.45)', justifyContent: 'center', padding: 22 },
-  modal: { maxHeight: '88%', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 18, gap: 12 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  modal: {
+    maxHeight: '88%',
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
+    gap: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   modalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
   modalSubtitle: { fontSize: 11, marginTop: 2 },
   inputGroup: { gap: 5, marginBottom: 10 },
   inputLabel: { fontSize: 10, letterSpacing: 0.7, fontFamily: 'Inter_600SemiBold' },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15 },
   inputMultiline: { minHeight: 82, textAlignVertical: 'top' },
+  categoryEditHint: { fontSize: 10, lineHeight: 14, marginTop: -5, marginBottom: 8 },
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10 },
 });
